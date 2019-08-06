@@ -52,8 +52,23 @@ DICT_IMP_ORG = {
   "5902": 902
 }
 
-# Retorna un array xq un dom puede tener mas de una org (roles de disintas orgs)
-def resolve_orgs( idkey: str, idval: str, value: str ):
+CURRENT_STATE = EMPTY_DATAFRAME
+
+def resolve_orgs_from_doms( idval: str ):
+  # TODO: si idKey de dom comienza con 1 puede 
+  # relacionarse con mas de una org
+  # hay que recuperar los disintos org desde los dor del state
+  # por ahora retorna []
+  return []
+
+def resolve_org_from_dors( idval: str ):
+  # TODO: Propuesta: 
+  # - dor: cambiar la key: ORG.DOM_ORG.TIPO.ORG.ROL
+  # - agregar columna T_JURISDICCION_ROL.ID_AT_ROL (para identificar la org del rol) 
+  return []
+
+# Retorna un array xq un dom puede tener mas de una org (roles de distintas orgs)
+def resolve_orgs( idkey: str, idval: str ):
   org = 0
   if   idkey == 'cms': 
        org = 900
@@ -61,22 +76,18 @@ def resolve_orgs( idkey: str, idval: str, value: str ):
        org = DICT_IMP_ORG.get( idval, 0 )
   elif idkey == 'con': 
        org = DICT_IMP_ORG.get( idval.split('.')[0], 0 )
-  elif idkey in [ 'jur', 'act', 'dom', 'rol' ]: 
+  elif idkey in [ 'jur', 'act', 'dom', 'dor' ]: 
        org = int( idval.split('.')[0] )
   
   if org > 1: return [ org ]
 
-  if idkey in [ 'dom', 'rol' ]: 
-     # TODO: si idKey comienza con 1 puede 
-     # relacionarse con mas de una org
-     # hay que buscar en el state
-     # por ahora retorna []
-     return []
+  if len( CURRENT_STATE ) == 0: return []
 
-     # Propuesta: 
-     # - dor: cambiar la key: ORG.DOM_ORG.TIPO.ORG.ROL
-     # - agregar columna T_JURISDICCION_ROL.ID_AT_ROL (para identificar la org del rol) 
-  return [ ]
+  if idkey == 'dom': return resolve_orgs_from_doms( idval )
+
+  if idkey == 'dor': return [ resolve_org_from_dors( idval ) ]
+
+  return []
 
 
 # Suppress SettingWithCopyWarning: 
@@ -88,19 +99,18 @@ def add_org( df: pd.DataFrame, state: pd.DataFrame ):
 
   if len( df ) == 0: return df
 
-  # return df.assign(org=lambda row: resolve_orgs( row.componentid, 
-  #                                                row.componentvalue, 
-  #                                                row.value,
-  #                                                state ),
-  #                                                axis=1 ) 
- 
+  # no se puede pasar como argumto al resolve_orgs
+  # entonces se utiliza una variable global
+  CURRENT_STATE = state 
   df['org'] = df.apply(lambda row: resolve_orgs( row.componentid, 
-                                                 row.componentvalue, 
-                                                 row.value ), 
+                                                 row.componentvalue ), 
                                                  axis=1 ) 
-  # agrega org
-  # desde actiidad, domicilio, impuesto, cms
-  # bien dificil !!!
+  # TODO: agrega otra columna que indica si 
+  # el tipo de operacion es Create, Update, Delete
+  # si el state esta vacio, son todas Create
+  # si el value esta vacio, es un Delete
+
+  # TODO: agregar otra columna period que indica Start o End
   return df
 
 def mk_wsetdf( res ):
@@ -123,6 +133,8 @@ def process_txpersona( block: int, txseq: int, personaid: int, changes: pd.DataF
   # print( "processing block {} personaid {} ...".format( block, personaid ) )
 
   state = get_persona_state( block, personaid )
+
+  if len( state ) > 0: state = add_org( state )
 
   changes = add_org( changes, state )
  
