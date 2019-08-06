@@ -42,6 +42,53 @@ where block < :block
 and key like :keypattern
 order by key, block desc"""
 
+EMPTY_DATAFRAME = pd.DataFrame()
+
+DICT_IMP_ORG = {
+  "5900": 900,
+  "5901": 901,
+  "5902": 902
+}
+
+# Retorna un array xq un dom puede tener mas de una org (roles de disintas orgs)
+def resolve_orgs( idkey: str, idval: str, value: str ):
+  if idkey == 'cms': return [ 900 ]
+  if idkey == 'imp': return [ DICT_IMP_ORG.get( idval, 1 ) ]
+  if idkey == 'con': return [ DICT_IMP_ORG.get( idval.split('.')[0], 1 ) ]
+  if idkey in [ 'jur', 'act' ]: return [ int( idval.split('.')[0] ) ]
+  if idkey in [ 'dom', 'rol' ]: 
+     org = int( idval.split('.')[0] )
+     if org > 1: return [ org ]
+     # Propuesta: 
+     # - dor: cambiar la key: ORG.DOM_ORG.TIPO.ORG.ROL
+     # - agregar columna T_JURISDICCION_ROL.ID_AT_ROL (para identificar la org del rol) 
+  return [ 1 ]
+
+
+# Suppress SettingWithCopyWarning: 
+# A value is trying to be set on a copy of a slice from a DataFrame.
+# Try using .loc[row_indexer,col_indexer] = value instead
+pd.options.mode.chained_assignment = None
+
+def add_org( df: pd.DataFrame, state: pd.DataFrame ):
+
+  if len( df ) == 0: return df
+
+  # return df.assign(org=lambda row: resolve_orgs( row.componentid, 
+  #                                                row.componentvalue, 
+  #                                                row.value,
+  #                                                state ),
+  #                                                axis=1 ) 
+ 
+  df['org'] = df.apply(lambda row: resolve_orgs( row.componentid, 
+                                                 row.componentvalue, 
+                                                 row.value ), 
+                                                 axis=1 ) 
+  # agrega org
+  # desde actiidad, domicilio, impuesto, cms
+  # bien dificil !!!
+  return df
+
 def mk_wsetdf( res ):
   df = pd.DataFrame(res, columns=['block', 'txseq', 'item', 'key', 'value', 'isdelete']) 
   new = df["key"].str.split("#", n=1, expand=True)
@@ -55,54 +102,19 @@ def mk_wsetdf( res ):
 def get_persona_state( block: int, personaid: int ):
   keypattern = "per:" + personaid + "#%"
   res = db.queryall( QUERY_KEYPATTERN_WSET, { "block" : block, "keypattern" : keypattern } )
-  if len(res) == 0: return pd.DataFrame() # Empty DataFrame
+  if len(res) == 0: return EMPTY_DATAFRAME
   return mk_wsetdf( res ).groupby( ['key'] ).first()
 
-def get_group( groups, key: str ):
-  try:
-    return groups.get_group( key )
-  except:
-    return pd.DataFrame() # Empty DataFrame
-
-def process_txpersona( block: int, txseq: int, personaid: int, wsetdf: pd.DataFrame ):
+def process_txpersona( block: int, txseq: int, personaid: int, changes: pd.DataFrame ):
   # print( "processing block {} personaid {} ...".format( block, personaid ) )
 
   state = get_persona_state( block, personaid )
-  if len(state) > 0:
-     st_components = state.groupby( ['componentid'] )
-     st_per  = get_group( st_components, 'per' )
-     st_wit  = get_group( st_components, 'wit' )
-     st_imps = get_group( st_components, 'imp' )
-     st_jurs = get_group( st_components, 'jur' )
-     st_acts = get_group( st_components, 'act' )
-     st_doms = get_group( st_components, 'dom' )
-     st_dors = get_group( st_components, 'dor' )
-     st_cmss = get_group( st_components, 'cms' )
-     st_rels = get_group( st_components, 'rel' )
-  else:
-     st_per = st_wit = st_imps = st_jurs = st_acts = st_doms = st_dors = st_cmss = st_rels = pd.DataFrame()
-  
-  print( "personaid {} st: wit {} per {} imps {} jurs {} acts {} doms {} dors {} cmss {} rels {} ".format( 
-          personaid, 
-          len(st_wit), len(st_per), len(st_imps), len(st_jurs), 
-          len(st_acts), len(st_doms), len(st_dors), len(st_cmss), len(st_rels)) )
 
-  components = wsetdf.groupby( ['componentid'] )
-  per  = get_group( components, 'per' )
-  wit  = get_group( components, 'wit' )
-  imps = get_group( components, 'imp' )
-  jurs = get_group( components, 'jur' )
-  acts = get_group( components, 'act' )
-  doms = get_group( components, 'dom' )
-  dors = get_group( components, 'dor' )
-  cmss = get_group( components, 'cms' )
-  rels = get_group( components, 'rel' )
-
-  print( "personaid {} tx: wit {} per {} imps {} jurs {} acts {} doms {} dors {} cmss {} rels {} ".format( 
-          personaid, 
-          len(wit), len(per), len(imps), len(jurs), 
-          len(acts), len(doms), len(dors), len(cmss), len(rels)) )
-
+  changes = add_org( changes, state )
+ 
+  if len( changes.query( 'componentid == "imp" & componentvalue  >= "5000"' ) ) > 0:
+     print("personaid {} con impuesto jurisdiccional !!!".format( personaid ))
+     print( changes ) 
 
 USER = 'HLF'
 PASSW = 'HLF'
@@ -122,6 +134,7 @@ if __name__ == '__main__':
   db = db_access(USER, PASSW, URLDB)
 
   block = 53319
+  block = 53401
 
   res = db.queryall( QUERY_BLOCK_WSET, { "block" : block } )
 
