@@ -44,6 +44,8 @@ order by key, block desc"""
 
 EMPTY_DATAFRAME = pd.DataFrame()
 
+# TODO: Agregar todos los impuestos
+# Incluyendo los municipales
 DICT_IMP_ORG = {
   "5900": 900,
   "5901": 901,
@@ -52,17 +54,29 @@ DICT_IMP_ORG = {
 
 # Retorna un array xq un dom puede tener mas de una org (roles de disintas orgs)
 def resolve_orgs( idkey: str, idval: str, value: str ):
-  if idkey == 'cms': return [ 900 ]
-  if idkey == 'imp': return [ DICT_IMP_ORG.get( idval, 1 ) ]
-  if idkey == 'con': return [ DICT_IMP_ORG.get( idval.split('.')[0], 1 ) ]
-  if idkey in [ 'jur', 'act' ]: return [ int( idval.split('.')[0] ) ]
+  org = 0
+  if   idkey == 'cms': 
+       org = 900
+  elif idkey == 'imp': 
+       org = DICT_IMP_ORG.get( idval, 0 )
+  elif idkey == 'con': 
+       org = DICT_IMP_ORG.get( idval.split('.')[0], 0 )
+  elif idkey in [ 'jur', 'act', 'dom', 'rol' ]: 
+       org = int( idval.split('.')[0] )
+  
+  if org > 1: return [ org ]
+
   if idkey in [ 'dom', 'rol' ]: 
-     org = int( idval.split('.')[0] )
-     if org > 1: return [ org ]
+     # TODO: si idKey comienza con 1 puede 
+     # relacionarse con mas de una org
+     # hay que buscar en el state
+     # por ahora retorna []
+     return []
+
      # Propuesta: 
      # - dor: cambiar la key: ORG.DOM_ORG.TIPO.ORG.ROL
      # - agregar columna T_JURISDICCION_ROL.ID_AT_ROL (para identificar la org del rol) 
-  return [ 1 ]
+  return [ ]
 
 
 # Suppress SettingWithCopyWarning: 
