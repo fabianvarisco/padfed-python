@@ -42,8 +42,6 @@ where block < :block
 and key like :keypattern
 order by key, block desc"""
 
-EMPTY_DATAFRAME = pd.DataFrame()
-
 # TODO: Agregar todos los impuestos
 # Incluyendo los municipales
 DICT_IMP_ORG = {
@@ -52,40 +50,44 @@ DICT_IMP_ORG = {
   "5902": 902
 }
 
-CURRENT_STATE = EMPTY_DATAFRAME
+EMPTY_DATAFRAME = pd.DataFrame()
+global_state = EMPTY_DATAFRAME
 
-def resolve_orgs_from_doms( idval: str ):
+def resolve_orgs_from_dors( idvalue: str ):
   # TODO: si idKey de dom comienza con 1 puede 
   # relacionarse con mas de una org
-  # hay que recuperar los disintos org desde los dor del state
-  # por ahora retorna []
-  return []
+  # hay que recuperar las disintas orgs desde los dor del state
 
-def resolve_org_from_dors( idval: str ):
-  # TODO: Propuesta: 
-  # - dor: cambiar la key: ORG.DOM_ORG.TIPO.ORG.ROL
-  # - agregar columna T_JURISDICCION_ROL.ID_AT_ROL (para identificar la org del rol) 
-  return []
+  if len( global_state ) == 0: return []
+
+  # busca roles del domicilio
+  # org.domiorg.tipo.orden.rol
+  roles = global_state[ global_state['componentid'] == "dor" \
+                      & global_state['componentvalue'].str.contains( idvalue ) ]
+  
+  if len( roles ) == 0: return []
+  
+  orgs = roles['componentvalue'].str.split(".", n=1, expand=True)[0]
+
+  return orgs.unique().astype(int).tolist()
 
 # Retorna un array xq un dom puede tener mas de una org (roles de distintas orgs)
-def resolve_orgs( idkey: str, idval: str ):
+def resolve_orgs( idkey: str, idvalue: str ):
   org = 0
   if   idkey == 'cms': 
        org = 900
   elif idkey == 'imp': 
-       org = DICT_IMP_ORG.get( idval, 0 )
+       org = DICT_IMP_ORG.get( idvalue, 0 )
   elif idkey == 'con': 
-       org = DICT_IMP_ORG.get( idval.split('.')[0], 0 )
+       org = DICT_IMP_ORG.get( idvalue.split('.')[0], 0 )
   elif idkey in [ 'jur', 'act', 'dom', 'dor' ]: 
-       org = int( idval.split('.')[0] )
+       org = int( idvalue.split('.')[0] )
   
   if org > 1: return [ org ]
 
-  if len( CURRENT_STATE ) == 0: return []
+  if len( global_state ) == 0: return []
 
-  if idkey == 'dom': return resolve_orgs_from_doms( idval )
-
-  if idkey == 'dor': return [ resolve_org_from_dors( idval ) ]
+  if idkey == 'dom': return resolve_orgs_from_dors( idvalue )
 
   return []
 
@@ -99,9 +101,11 @@ def add_org( df: pd.DataFrame, state: pd.DataFrame ):
 
   if len( df ) == 0: return df
 
-  # no se puede pasar como argumto al resolve_orgs
+  # no se puede pasar como argumento al resolve_orgs
   # entonces se utiliza una variable global
-  CURRENT_STATE = state 
+  global global_state 
+  global_state = state
+
   df['org'] = df.apply(lambda row: resolve_orgs( row.componentid, 
                                                  row.componentvalue ), 
                                                  axis=1 ) 
@@ -134,10 +138,10 @@ def process_txpersona( block: int, txseq: int, personaid: int, changes: pd.DataF
 
   state = get_persona_state( block, personaid )
 
-  if len( state ) > 0: state = add_org( state )
+  if len( state ) > 0: state = add_org( state, EMPTY_DATAFRAME )
 
   changes = add_org( changes, state )
- 
+
   if len( changes.query( 'componentid == "imp" & componentvalue  >= "5000"' ) ) > 0:
      print("personaid {} con impuesto jurisdiccional !!!".format( personaid ))
      print( changes ) 
