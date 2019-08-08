@@ -45,9 +45,9 @@ order by key, block desc"""
 # TODO: Agregar todos los impuestos
 # Incluyendo los municipales
 DICT_IMP_ORG = {
-  "5900": 900,
-  "5901": 901,
-  "5902": 902
+  "5900": "900",
+  "5901": "901",
+  "5902": "902"
 }
 
 EMPTY_DATAFRAME = pd.DataFrame()
@@ -58,38 +58,34 @@ def resolve_orgs_from_dors( idvalue: str ):
   # relacionarse con mas de una org
   # hay que recuperar las disintas orgs desde los dor del state
 
-  if len( global_state ) == 0: return []
+  if len( global_state ) == 0: return ""
 
   # busca roles del domicilio
   # org.domiorg.tipo.orden.rol
   roles = global_state[ global_state['componentid'] == "dor" \
                       & global_state['componentvalue'].str.contains( idvalue ) ]
   
-  if len( roles ) == 0: return []
+  if len( roles ) == 0: return None
   
   orgs = roles['componentvalue'].str.split(".", n=1, expand=True)[0]
 
-  return orgs.unique().astype(int).tolist()
+  return ",".join( orgs.unique().tolist() )
 
-# Retorna un array xq un dom puede tener mas de una org (roles de distintas orgs)
+# Retorna un string conteniendo una lista de orgs separados por coma (roles de distintas orgs)
 def resolve_orgs( idkey: str, idvalue: str ):
-  org = 0
-  if   idkey == 'cms': 
-       org = 900
-  elif idkey == 'imp': 
-       org = DICT_IMP_ORG.get( idvalue, 0 )
-  elif idkey == 'con': 
-       org = DICT_IMP_ORG.get( idvalue.split('.')[0], 0 )
-  elif idkey in [ 'jur', 'act', 'dom', 'dor' ]: 
-       org = int( idvalue.split('.')[0] )
-  
-  if org > 1: return [ org ]
+  if idkey == 'cms': return "900"
+  if idkey == 'imp': return DICT_IMP_ORG.get( idvalue, None )
+  if idkey == 'con': return DICT_IMP_ORG.get( idvalue.split('.')[0], None )
+  if idkey in [ 'jur', 'act', 'dom', 'dor' ]: 
+     org = idvalue.split('.')[0]
+     if org != "1": return org
 
-  if len( global_state ) == 0: return []
+  if len( global_state ) == 0: return None
 
+  # dom de AFIP: en el state puede tener roles de distintas jurisdicciones
   if idkey == 'dom': return resolve_orgs_from_dors( idvalue )
 
-  return []
+  return None
 
 
 # Suppress SettingWithCopyWarning: 
@@ -138,7 +134,12 @@ def process_txpersona( block: int, txseq: int, personaid: int, changes: pd.DataF
 
   state = get_persona_state( block, personaid )
 
-  if len( state ) > 0: state = add_org( state, EMPTY_DATAFRAME )
+  if len( state ) > 0: 
+     state = add_org( state, EMPTY_DATAFRAME )
+     if state.org.count() > 0:
+        print("personaid {} con state con datos jurisdiccionales !!!".format( personaid ))
+     else:
+        state = EMPTY_DATAFRAME 
 
   changes = add_org( changes, state )
 
@@ -165,6 +166,7 @@ if __name__ == '__main__':
 
   block = 53319
   block = 53401
+  block = 53410
 
   res = db.queryall( QUERY_BLOCK_WSET, { "block" : block } )
 
@@ -172,5 +174,6 @@ if __name__ == '__main__':
 
   groups = mk_wsetdf( res ).groupby(['txseq', 'personaid'])
 
-  for name, group in groups: process_txpersona( block, name[0], name[1], group )
+  for name, group in groups: 
+      process_txpersona( block, name[0], name[1], group )
 
