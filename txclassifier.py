@@ -137,15 +137,24 @@ def process_txpersona( block: int, txseq: int, personaid: int, changes: pd.DataF
   if len( state ) > 0: 
      state = add_org( state, EMPTY_DATAFRAME )
      if state.org.count() > 0:
-        print("personaid {} con state con datos jurisdiccionales !!!".format( personaid ))
+        print("personaid {} con state con datos jurisdiccionales ...".format( personaid ))
      else:
-        state = EMPTY_DATAFRAME 
+        # Si el state no tiene datos jurisdiccionales se vacia
+        state = state[0:0] 
 
   changes = add_org( changes, state )
 
-  if len( changes.query( 'componentid == "imp" & componentvalue  >= "5000"' ) ) > 0:
-     print("personaid {} con impuesto jurisdiccional !!!".format( personaid ))
-     print( changes ) 
+  if changes.org.count() == 0: return None # sin transacciones jurisdiccionales
+
+  print("personaid {} con impuesto jurisdiccional !!!".format( personaid ))
+  print( changes ) 
+
+  txs = pd.DataFrame(columns=['org', 'tx'])
+
+  
+  
+
+     
 
 USER = 'HLF'
 PASSW = 'HLF'
