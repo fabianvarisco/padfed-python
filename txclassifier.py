@@ -225,7 +225,9 @@ if __name__ == '__main__':
 
   res = db.queryall( QUERY_BLOCK_WSET, { "block" : block } )
 
-  if len(res) == 0: exit ## Empty block
+  if len(res) == 0: 
+     print( "block {} does not exists".format( block ) )
+     quit()
 
   groups = mk_wsetdf( res ).groupby(['txseq', 'personaid'])
 
