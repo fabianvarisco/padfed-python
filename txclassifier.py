@@ -4,6 +4,7 @@ import json
 import cx_Oracle
 import pandas as pd
 import os
+import json
 
 # Oracle Data access
 class db_access:
@@ -45,48 +46,60 @@ order by key, block desc"""
 # TODO: Agregar todos los impuestos
 # Incluyendo los municipales
 DICT_IMP_ORG = {
-  "5900": "900",
-  "5901": "901",
-  "5902": "902"
+  5900: 900,
+  5901: 901,
+  5902: 902
 }
 
 EMPTY_DATAFRAME = pd.DataFrame()
 global_state = EMPTY_DATAFRAME
 
-def resolve_orgs_from_dors( idvalue: str ):
-  # TODO: si idKey de dom comienza con 1 puede 
-  # relacionarse con mas de una org
+def resolve_orgs_from_dors( dom_value: str ):
+  # TODO: revisar con team SR
   # hay que recuperar las disintas orgs desde los dor del state
 
-  if len( global_state ) == 0: return ""
+  if len( global_state ) == 0: return None
 
-  # busca roles del domicilio
-  # org.domiorg.tipo.orden.rol
-  roles = global_state[ global_state['componentid'] == "dor" \
-                      & global_state['componentvalue'].str.contains( idvalue ) ]
-  
+  # busca roles del domicilio y se queda con los values
+  roles = global_state.loc[ global_state.component_type == "dor", "value" ]
+
   if len( roles ) == 0: return None
-  
-  orgs = roles['componentvalue'].str.split(".", n=1, expand=True)[0]
 
-  return ",".join( orgs.unique().tolist() )
+  dom = json.loads( dom_value )
+
+  orgs = set()
+
+  for v in roles.values:
+      dor = json.loads( v )
+      if dor["tipo"] == dom["tipo"] and dor["orden"] == dom["orden"]:
+         if dor["org"] not in orgs: 
+            if dor["org"] > 1:
+               # TODO: no debe ser 1
+               orgs.add( dor["org"] )
+  
+  return None if len( orgs ) == 0 else ",".join( orgs )
 
 # Retorna un string conteniendo una lista de orgs separados por coma (roles de distintas orgs)
-def resolve_orgs( idkey: str, idvalue: str ):
-  if idkey == 'cms': return "900"
-  if idkey == 'imp': return DICT_IMP_ORG.get( idvalue, None )
-  if idkey == 'con': return DICT_IMP_ORG.get( idvalue.split('.')[0], None )
-  if idkey in [ 'jur', 'act', 'dom', 'dor' ]: 
-     org = idvalue.split('.')[0]
-     if org != "1": return org
+def resolve_orgs( component_type: str, value: str ):
+
+  if component_type == 'cms': return "900"
+
+  if component_type in [ 'imp', 'con' ]: 
+     imp = json.loads( value )["impuesto"]
+     org = DICT_IMP_ORG.get( imp, None )
+     return None if org == None else str( org )
+
+  if component_type in [ 'jur', 'act', 'dom', 'dor' ]: 
+     org = json.loads( value )["org"]
+     if org > 1: return str( org )
 
   if len( global_state ) == 0: return None
 
   # dom de AFIP: en el state puede tener roles de distintas jurisdicciones
-  if idkey == 'dom': return resolve_orgs_from_dors( idvalue )
+  if component_type == 'dom': 
+     return resolve_orgs_from_dors( value )
 
   return None
-
 
 # Suppress SettingWithCopyWarning: 
 # A value is trying to be set on a copy of a slice from a DataFrame.
@@ -102,8 +115,8 @@ def add_org( df: pd.DataFrame, state: pd.DataFrame ):
   global global_state 
   global_state = state
 
-  df['org'] = df.apply(lambda row: resolve_orgs( row.componentid, 
-                                                 row.componentvalue ), 
+  df['org'] = df.apply(lambda row: resolve_orgs( row.component_type, 
+                                                 row.value ), 
                                                  axis=1 ) 
   # TODO: agrega otra columna que indica si 
   # el tipo de operacion es Create, Update, Delete
@@ -118,9 +131,9 @@ def mk_wsetdf( res ):
   new = df["key"].str.split("#", n=1, expand=True)
   personaid = new[0].str.split(":", n=1, expand=True)
   component = new[1].str.split(":", n=1, expand=True)
-  df["personaid"] = personaid[1]
-  df["componentid"] = component[0]
-  df["componentvalue"] = component[1] 
+  df["personaid"]     = personaid[1]
+  df["component_type"]  = component[0] # ej: dom
+  df["component_key"] = component[1] # ej: 1.3.10
   return df
 
 def get_persona_state( block: int, personaid: int ):
@@ -146,10 +159,43 @@ def process_txpersona( block: int, txseq: int, personaid: int, changes: pd.DataF
 
   if changes.org.count() == 0: return None # sin transacciones jurisdiccionales
 
-  print("personaid {} con impuesto jurisdiccional !!!".format( personaid ))
-  print( changes ) 
+  print("personaid {} con datos jurisdiccionales !!!".format( personaid ))
+  print( changes[["key","org"]] ) 
 
   txs = pd.DataFrame(columns=['org', 'tx'])
+
+
+  # {"impuesto":11,"inscripcion":"2019-05-31","estado":"AC","dia":1,"periodo":201905,"motivo":{"id":44},"ds":"2019-05-31"}
+  #
+  # MIGRACION
+  # - tiene imp con org X y estado AC 
+  # - no tiene state con org X
+  # - tiene dom con org == component_key[0] # Domicilio migrado
+  # accion:
+  # - una tx { imp.org, MIGRACION }
+  # - una tx por cada jur { jur.org, MIGRACION_DESDE_CM }
+  #
+
+  # ALTA EN JUR
+  # - tiene imp con org X y estado AC 
+  # - no tiene state con org X
+  # - no tiene dom con org == component_key[0] # Domicilio migrado
+  # accion:
+  # - una tx { imp.org, ALTA EN JUR }
+  # - una tx por cada jur { jur.org, ALTA EN CM }
+  #
+
+  # CM CAMBIO DE JURISDICCION
+  # - tiene jur con value distinto de state
+  #
+  #
+  #
+  #
+
+
+
+
+   
 
   
   
