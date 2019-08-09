@@ -30,13 +30,13 @@ class db_access:
       if cur is not None: cur.close()
       if cnx is not None: self.pool.release(cnx)
 
-QUERY_BLOCK_WSET = """
+QUERY_WSET_BY_BLOCK = """
 select * 
 from hlf.bc_valid_tx_write_set 
 where block = :block
 order by txseq, item"""
 
-QUERY_KEYPATTERN_WSET = """
+QUERY_WSET_BY_KEYPATTERN = """
 select *
 from hlf.bc_valid_tx_write_set
 where block < :block
@@ -118,12 +118,6 @@ def add_org( df: pd.DataFrame, state: pd.DataFrame ):
   df['org'] = df.apply(lambda row: resolve_orgs( row.component_type, 
                                                  row.value ), 
                                                  axis=1 ) 
-  # TODO: agrega otra columna que indica si 
-  # el tipo de operacion es Create, Update, Delete
-  # si el state esta vacio, son todas Create
-  # si el value esta vacio, es un Delete
-
-  # TODO: agregar otra columna period que indica Start o End
   return df
 
 def mk_wsetdf( res ):
@@ -133,14 +127,17 @@ def mk_wsetdf( res ):
   component = new[1].str.split(":", n=1, expand=True)
   df["personaid"]     = personaid[1]
   df["component_type"]  = component[0] # ej: dom
-  df["component_key"] = component[1] # ej: 1.3.10
+  df["component_key"] = component[1] # ej: 1.3.10, vvamos a tratar de no usuarla. mejor procesar el value json
   return df
 
 def get_persona_state( block: int, personaid: int ):
   keypattern = "per:" + personaid + "#%"
-  res = db.queryall( QUERY_KEYPATTERN_WSET, { "block" : block, "keypattern" : keypattern } )
+  res = db.queryall( QUERY_WSET_BY_KEYPATTERN, { "block" : block, "keypattern" : keypattern } )
   if len(res) == 0: return EMPTY_DATAFRAME
-  return mk_wsetdf( res ).groupby( ['key'] ).first()
+  
+  state = mk_wsetdf( res ).groupby( ['key'] ).first()
+  # TODO: eliminar los filas con delete antes de retornar el state
+  return state
 
 def process_txpersona( block: int, txseq: int, personaid: int, changes: pd.DataFrame ):
   # print( "processing block {} personaid {} ...".format( block, personaid ) )
@@ -164,7 +161,8 @@ def process_txpersona( block: int, txseq: int, personaid: int, changes: pd.DataF
 
   txs = pd.DataFrame(columns=['org', 'tx'])
 
-
+  # TODO: Tener en cuenta que las rows puede ser DELETEs !!!!
+  #
   # {"impuesto":11,"inscripcion":"2019-05-31","estado":"AC","dia":1,"periodo":201905,"motivo":{"id":44},"ds":"2019-05-31"}
   #
   # MIGRACION
@@ -192,19 +190,11 @@ def process_txpersona( block: int, txseq: int, personaid: int, changes: pd.DataF
   #
   #
 
-
-
-
-   
-
-  
-  
-
-     
-
 USER = 'HLF'
 PASSW = 'HLF'
 URLDB = 'localhost/xe'
+
+###################################################################    
 
 if __name__ == '__main__':
 
@@ -223,10 +213,10 @@ if __name__ == '__main__':
   block = 53401
   block = 53410
 
-  res = db.queryall( QUERY_BLOCK_WSET, { "block" : block } )
+  res = db.queryall( QUERY_WSET_BY_BLOCK, { "block" : block } )
 
   if len(res) == 0: 
-     print( "block {} does not exists".format( block ) )
+     print( "block {} does not exists or empty".format( block ) )
      quit()
 
   groups = mk_wsetdf( res ).groupby(['txseq', 'personaid'])
