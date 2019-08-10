@@ -52,54 +52,58 @@ DICT_IMP_ORG = {
 }
 
 EMPTY_DATAFRAME = pd.DataFrame()
-global_state = EMPTY_DATAFRAME
 
-def resolve_orgs_from_dors( dom_value: str ):
-  # TODO: revisar con team SR
-  # hay que recuperar las disintas orgs desde los dor del state
+def mk_resolver_orgs( state: pd.DataFrame ):
 
-  if len( global_state ) == 0: return None
-
-  # busca roles del domicilio y se queda con los values
-  roles = global_state.loc[ global_state.component_type == "dor", "value" ]
-
-  if len( roles ) == 0: return None
-
-  dom = json.loads( dom_value )
-
-  orgs = set()
-
-  for v in roles.values:
-      dor = json.loads( v )
-      if dor["tipo"] == dom["tipo"] and dor["orden"] == dom["orden"]:
-         if dor["org"] not in orgs: 
-            if dor["org"] > 1:
-               # TODO: no debe ser 1
-               orgs.add( dor["org"] )
-  
-  return None if len( orgs ) == 0 else ",".join( orgs )
-
-# Retorna un string conteniendo una lista de orgs separados por coma (roles de distintas orgs)
-def resolve_orgs( component_type: str, value: str ):
-
-  if component_type == 'cms': return "900"
-
-  if component_type in [ 'imp', 'con' ]: 
-     imp = json.loads( value )["impuesto"]
-     org = DICT_IMP_ORG.get( imp, None )
-     return None if org == None else str( org )
-
-  if component_type in [ 'jur', 'act', 'dom', 'dor' ]: 
-     org = json.loads( value )["org"]
-     if org > 1: return str( org )
-
-  if len( global_state ) == 0: return None
-
-  # dom de AFIP: en el state puede tener roles de distintas jurisdicciones
-  if component_type == 'dom': 
-     return resolve_orgs_from_dors( value )
-
-  return None
+    # Inner func using state
+    def resolve_orgs_from_dors( dom_value: str ):
+        # TODO: revisar con team SR
+        # hay que recuperar las disintas orgs desde los dor del state
+      
+        if len( state ) == 0: return None
+      
+        # busca roles del domicilio y se queda con los values
+        roles = state.loc[ state.component_type == "dor", "value" ]
+      
+        if len( roles ) == 0: return None
+      
+        dom = json.loads( dom_value )
+      
+        orgs = set()
+      
+        for v in roles.values:
+            dor = json.loads( v )
+            if dor["tipo"] == dom["tipo"] and dor["orden"] == dom["orden"]:
+               if dor["org"] not in orgs: 
+                  if dor["org"] > 1:
+                     # TODO: no debe ser 1
+                     orgs.add( dor["org"] )
+        
+        return None if len( orgs ) == 0 else ",".join( orgs )
+    
+    # Inner func
+    # Retorna un string conteniendo una lista de orgs 
+    # separados por coma (roles de distintas orgs)
+    def resolve_orgs( component_type: str, value: str ):
+    
+        if component_type == 'cms': return "900"
+      
+        if component_type in [ 'imp', 'con' ]: 
+           imp = json.loads( value )["impuesto"]
+           org = DICT_IMP_ORG.get( imp, None )
+           return None if org == None else str( org )
+      
+        if component_type in [ 'jur', 'act', 'dom', 'dor' ]: 
+           org = json.loads( value )["org"]
+           if org > 1: return str( org )
+      
+        if len( state ) == 0: return None
+      
+        # dom de AFIP: en el state puede tener roles de distintas jurisdicciones
+        return None if component_type != 'dom' else resolve_orgs_from_dors( value )
+    
+    # return clousure func 
+    return resolve_orgs
 
 # Suppress SettingWithCopyWarning: 
 # A value is trying to be set on a copy of a slice from a DataFrame.
@@ -112,8 +116,7 @@ def add_org( df: pd.DataFrame, state: pd.DataFrame ):
 
   # no se puede pasar como argumento al resolve_orgs
   # entonces se utiliza una variable global
-  global global_state 
-  global_state = state
+  resolve_orgs = mk_resolver_orgs( state )
 
   df['org'] = df.apply(lambda row: resolve_orgs( row.component_type, 
                                                  row.value ), 
@@ -125,9 +128,9 @@ def mk_wsetdf( res ):
   new = df["key"].str.split("#", n=1, expand=True)
   personaid = new[0].str.split(":", n=1, expand=True)
   component = new[1].str.split(":", n=1, expand=True)
-  df["personaid"]     = personaid[1]
-  df["component_type"]  = component[0] # ej: dom
-  df["component_key"] = component[1] # ej: 1.3.10, vvamos a tratar de no usuarla. mejor procesar el value json
+  df["personaid"]      = personaid[1]
+  df["component_type"] = component[0] # ej: dom
+  df["component_key"]  = component[1] # ej: 1.3.10, vamos a tratar de no usuar la key . mejor procesar el value json
   return df
 
 def get_persona_state( block: int, personaid: int ):
@@ -166,6 +169,7 @@ def process_txpersona( block: int, txseq: int, personaid: int, changes: pd.DataF
   # {"impuesto":11,"inscripcion":"2019-05-31","estado":"AC","dia":1,"periodo":201905,"motivo":{"id":44},"ds":"2019-05-31"}
   #
   # MIGRACION
+  # - no tiene del
   # - tiene imp con org X y estado AC 
   # - no tiene state con org X
   # - tiene dom con org == component_key[0] # Domicilio migrado
