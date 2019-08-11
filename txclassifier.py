@@ -4,6 +4,7 @@ import cx_Oracle
 import pandas as pd
 import os
 from wset import *
+from organizaciones import *
 
 # Oracle Data access
 class db_access:
@@ -41,16 +42,86 @@ from hlf.bc_valid_tx_write_set
 where block < :block
 and key like :keypattern
 order by key, block desc"""
+
+DICT_PROVINCIA_ORG = {
+  0: 901,
+  2: 902,
+  3: 903,
+}
   
 # Suppress SettingWithCopyWarning: 
 # A value is trying to be set on a copy of a slice from a DataFrame.
 # Try using .loc[row_indexer,col_indexer] = value instead
 pd.options.mode.chained_assignment = None
 
+def txs_append(txs: list, org: int, txt: string): txs.append({"org": org, "tx": txt})
+
 def mk_persona_state( block: int, personaid: int ):
     keypattern = "per:" + str( personaid ) + "#%"
     res = db.queryall(QUERY_WSET_BY_KEYPATTERN, {"block" : block, "keypattern" : keypattern})
     return Wset(res).resolve_state().extend()  
+
+def inscripto_en_cm(state: Wset, changes: Wset) -> bool:
+    return inscripto_en_org(state, changes, 900)
+
+def inscripto_en_org(state: Wset, changes: Wset, org: int) -> bool:
+    state_impuesto   = state.get_impuesto( org=org )
+    changes_impuesto = changes.get_impuesto( org=org )
+
+    if  getattr(state_impuesto, "estado", "") == "AC" \
+    and len(changes_impuesto) == 0: 
+        return True
+
+    if  getattr(changes_impuesto, "estado", "") == "AC" \
+    and getattr(changes_impuesto, "isdelete", "") != "T":
+        return True
+    
+    return False   
+
+def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
+    if inscripto_en_org(state, changes, org):
+       state_impuesto = state.get_impuesto(org=org)
+
+       # MIGRACION o INSCRIPCION
+       if len(state_impuesto) == 0:
+          txt = "MIGRACON" if changes.has_domicilios( org=org ) else "INSCRIPCION"
+          txs.append(txs, org, txt)
+          if org == 900:
+             tx += " DESDE CM"
+             for j in changes.get_jurisdicciones(): 
+                 txs_append(txs, j.get("org"), txt)
+          return txs
+
+       # REINSCRIPCION
+       if len(state_impuesto) > 0 and state_impuesto["estado"] != "AC":
+          txt = "REINSCRIPCION"
+          txs_append(txs, org, txt)
+          if org == 900:
+             txt += " DESDE CM"
+             for j in changes.get_jurisdicciones(): 
+                 if j.get("hasta", None) is None:
+                    txs_append(txs, j.get("org"), txt)
+          return txs
+    
+       if org == 900:
+          # CAMBIO DE JURISDICCION CM
+          changes_jurisdicciones = changes.get_jurisdicciones()
+          if len(changes_jurisdicciones) > 0:
+             txs_append(txs, 900, "CAMBIO JURISDICCION CM")
+             for j in changes_jurisdicciones:
+                 txs_append(txs, j.get("org"), "CAMBIO JURISDICCION CM")
+ 
+          # CAMBIO DE JURISDICCION CM
+          changes_cmsedes = changes.get_cmsedes()
+          if len(changes_cmsedes) > 0:
+             txs_append(txs, 900, "CAMBIO DE SEDE CM")
+             for s in changes_cmsedes:
+                 s_org = DICT_PROVINCIA_ORG.get(s.get("provincia"), -1)
+                 if s_org != -1: txs_append(txs, s_org, "CAMBIO DE SEDE CM")
+    
+       changes_actividades = changes.get_activides(org=org)
+       changes_domicilios = changes.get_domicilios(org=org)
+       changes_relaciones = changes.get_relaciones(org=org)
 
 def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFrame) -> list:
     # print( "processing block {} personaid {} ...".format( block, personaid ) )
@@ -74,52 +145,8 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
        print( "changes with orgs: {}".format( changes.count_with_orgs() ) )
        print( changes.get_df().loc[ getattr(changes.get_df(), "orgs").notnull(), ["component_key", "orgs"]] )
 
-    # TODO: Tener en cuenta que las rows puede ser DELETEs !!!!
-    #
-    # {"impuesto":11,"inscripcion":"2019-05-31","estado":"AC","dia":1,"periodo":201905,"motivo":{"id":44},"ds":"2019-05-31"}
-    #
-    # MIGRACION
-    # - no tiene del
-    # - tiene imp con org X y estado AC 
-    # - no tiene state con org X
-    # - tiene dom con org == component_key[0] # Domicilio migrado
-    # accion:
-    # - una tx { imp.org, MIGRACION }
-    # - una tx por cada jur { jur.org, MIGRACION_DESDE_CM }
-    #
-    changes_impuesto = changes.get_impuesto()
-    state_impuesto = None if changes_impuesto is None else state.get_impuesto( org=changes_impuesto["org"] )
+    for o in ORGANIZACIONES: txs.append(txs_by_org(state, changes, o.get("org")))
 
-    # MIGRACION | INSCRIPCION
-    if  not changes.has_deletes() \
-    and not changes_impuesto is None \
-    and changes_impuesto["estado"] == "AC" \
-    and state_impuesto is None:
-        org = changes_impuesto["org"]
-        tx = "MIGRACON" if changes.has_domicilios( org=org ) else "INSCRIPCION"
-        txs.append( {"org" : org, "tx" : tx} )
-        if org == 900:
-           tx += " DESDE CM"
-           for jur in changes.get_jurisdicciones(): 
-               txs.append( { "org" : jur["org"], "tx" : tx} )
-        return txs
-    
-    # REINSCRIPCION
-    if  not changes_impuesto is None \
-    and not state_impuesto is None \
-    and changes_impuesto["estado"] == "AC" \
-    and state_impuesto["estado"] != "AC":
-        tx = "REINSCRIPCION"
-        org = changes_impuesto["og"]
-        txs.append( {"org" : org, "tx" : tx} )
-        if org == 900:
-           tx += " DESDE CM"
-           for jur in changes.get_jurisdicciones(): 
-               if jur.get( "hasta", None ) is None:
-                  txs.append( { "org" : jur["org"], "tx" : tx} )
-        return txs
-    
-    # ?????
     return txs
 
 USER = 'HLF'
