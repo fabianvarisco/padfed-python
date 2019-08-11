@@ -154,28 +154,19 @@ class Wset():
       return None if len(orgs) == 0 else ",".join(orgs)
 
   def get_impuesto( self, org: int = -1, impuesto: int = -1) -> dict:
-
       impuestos = self.df.loc[getattr( self.df, "component_type" ) == "imp", "obj"]
-
-      if impuestos.empty: return None
-      
       for obj in impuestos:
           if obj["org"] > 1:
              if (org == -1 and impuesto == -1) \
              or (org == obj["org"] and impuesto == obj["impuesto"] ) \
              or (org == obj["org"] and impuesto == -1) \
              or (org == -1         and impuesto == obj["impuesto"]): return obj
-                                  
       return None
   
   def has_domicilios(self, org: int = -1 ) -> bool:
       domicilios = self.df.loc[getattr(self.df, "component_type") == "dom", "obj"] 
-      
-      if domicilios.empty: return False
-
       for obj in domicilios: 
           if obj["org"] > 1 and (obj["org"] == org or org == -1): return True
-
       return False
 
   def get_jurisdicciones(self): 
@@ -197,7 +188,7 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
     state = mk_persona_state(block, personaid)
 
     # Si el state no tiene datos jurisdiccionales lo vacia
-    if state.has_orgs(): state = Wset() 
+    if not state.has_orgs(): state = Wset() 
 
     changes = Wset(changes).extend(state.get_df())
 
