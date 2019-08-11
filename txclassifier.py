@@ -65,11 +65,11 @@ def inscripto_en_cm(state: Wset, changes: Wset) -> bool:
     return inscripto_en_org(state, changes, 900)
 
 def inscripto_en_org(state: Wset, changes: Wset, org: int) -> bool:
-    state_impuesto   = state.get_impuesto( org=org )
-    changes_impuesto = changes.get_impuesto( org=org )
+    state_impuesto   = state.get_impuesto_by_org(org)
+    changes_impuesto = changes.get_impuesto_by_org(org)
 
     if  state_impuesto.get("estado", "") == "AC" \
-    and (changes_impuesto is None or len(changes_impuesto) == 0): 
+    and len(changes_impuesto) == 0: 
         return True
 
     if  changes_impuesto.get("estado", "") == "AC" \
@@ -80,52 +80,56 @@ def inscripto_en_org(state: Wset, changes: Wset, org: int) -> bool:
 
 def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
 
+    txs = list()
+
     if  org not in state.get_orgs() \
-    and org not in changes.get_orgs(): return []
+    and org not in changes.get_orgs(): return txs
 
     if inscripto_en_org(state, changes, org):
-       state_impuesto = state.get_impuesto(org=org)
+       state_impuesto = state.get_impuesto_by_org(org)
 
        # MIGRACION o INSCRIPCION
-       if state_impuesto is None or len(state_impuesto) == 0:
+       if len(state_impuesto) == 0:
           txt = "MIGRACON" if changes.has_domicilios( org=org ) else "INSCRIPCION"
           txs.append(txs, org, txt)
-          if org == 900:
+          if org == COMARB:
              tx += " DESDE CM"
              for j in changes.get_jurisdicciones(): 
                  txs_append(txs, j.get("org"), txt)
           return txs
 
        # REINSCRIPCION
-       if not state_impuesto is None and state_impuesto.get("estado", "") != "AC":
+       if len(state_impuesto) > 0 and state_impuesto.get("estado", "") != "AC":
           txt = "REINSCRIPCION"
           txs_append(txs, org, txt)
-          if org == 900:
+          if org == COMARB:
              txt += " DESDE CM"
              for j in changes.get_jurisdicciones(): 
                  if j.get("hasta", None) is None:
                     txs_append(txs, j.get("org"), txt)
           return txs
     
-       if org == 900:
+       if org == COMARB:
           # CAMBIO DE JURISDICCION CM
           changes_jurisdicciones = changes.get_jurisdicciones()
           if len(changes_jurisdicciones) > 0:
-             txs_append(txs, 900, "CAMBIO JURISDICCION CM")
+             txs_append(txs, COMARB, "CAMBIO JURISDICCION CM")
              for j in changes_jurisdicciones:
                  txs_append(txs, j.get("org"), "CAMBIO JURISDICCION CM")
  
           # CAMBIO DE JURISDICCION CM
           changes_cmsedes = changes.get_cmsedes()
           if len(changes_cmsedes) > 0:
-             txs_append(txs, 900, "CAMBIO DE SEDE CM")
+             txs_append(txs, COMARB, "CAMBIO DE SEDE CM")
              for s in changes_cmsedes:
                  s_org = get_org_by_provincia(s.get("provincia"))
                  if s_org != -1: txs_append(txs, s_org, "CAMBIO DE SEDE CM")
     
-       changes_actividades = changes.get_activides(org=org)
-       changes_domicilios = changes.get_domicilios(org=org)
-       changes_relaciones = changes.get_relaciones(org=org)
+       changes_actividades = changes.get_actividades()
+       changes_domicilios  = changes.get_domicilios()
+       changes_relaciones  = changes.get_relaciones()
+
+    return txs
 
 def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFrame) -> list:
     # print( "processing block {} personaid {} ...".format( block, personaid ) )
@@ -141,16 +145,11 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
 
     if  not state.has_orgs() and not changes.has_orgs(): return txs # sin datos jurisdiccionales
 
-    print( "personaid {} con datos jurisdiccionales !!!".format( personaid ))
-    if state.has_orgs():
-       print( "state with orgs: {}".format( state.count_with_orgs() ) )
-       print( state.get_df().loc[ getattr(state.get_df(), "orgs").notnull(), ["component_key", "orgs"]] )
-    if changes.has_orgs():
-       print( "changes with orgs: {}".format( changes.count_with_orgs() ) )
-       print( changes.get_df().loc[ getattr(changes.get_df(), "orgs").notnull(), ["component_key", "orgs"]] )
+    print("personaid {} con datos jurisdiccionales !!!".format( personaid ))
 
     for org in ORGANIZACIONES.keys(): 
-        txs.append(txs_by_org(state, changes, org))
+        orgs_txs = txs_by_org(state, changes, org)
+        if len(orgs_txs) > 0: txs.append(orgs_txs)
 
     return txs
 

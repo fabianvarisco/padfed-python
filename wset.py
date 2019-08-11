@@ -2,13 +2,7 @@
 # -*- coding: utf-8 -*-
 import json
 import pandas as pd
-
-# TODO: Agregar lista completa de impuestos extra AFIP
-DICT_IMP_ORG = {
-  5900: 900,
-  5901: 901,
-  5902: 902
-}
+from organizaciones import *
 
 class Wset():
 
@@ -75,7 +69,7 @@ class Wset():
 
   def resolve_orgs(self, component_type: str, obj: dict ) -> str:
     
-      if component_type == 'cms': return "900"
+      if component_type == 'cms': return str(COMARB)
       
       if component_type in [ 'imp', 'con' ]: 
          org = DICT_IMP_ORG.get( obj.get( "impuesto", -1 ), 1 )
@@ -106,33 +100,39 @@ class Wset():
         
       return None if len(orgs) == 0 else ",".join(orgs)
 
-  def get_impuesto( self, org: int = -1, impuesto: int = -1) -> dict:
-      if self.df.empty: return None
-      impuestos = self.df.loc[getattr( self.df, "component_type" ) == "imp", "obj"]
-      for obj in impuestos:
-          if obj["org"] > 1:
-             if (org == -1 and impuesto == -1) \
-             or (org == obj["org"] and impuesto == obj["impuesto"] ) \
-             or (org == obj["org"] and impuesto == -1) \
-             or (org == -1         and impuesto == obj["impuesto"]): return obj
-      return None
+  def get_impuesto_by_org(self, org: int) -> dict:
+      for o in self.get_impuestos(): 
+          if o.get("org") == org: 
+             return o
+      return dict()
   
-  def has_domicilios(self, org: int = -1 ) -> bool:
-      domicilios = self.df.loc[getattr(self.df, "component_type") == "dom", "obj"] 
-      for obj in domicilios: 
-          if obj["org"] > 1 and (obj["org"] == org or org == -1): return True
+  def has_domicilios(self, org: int = -1) -> bool:
+      for o in self.get_domicilios(): 
+          if o.get("org") > 1 and (o.obj("org") == org or org == -1): return True
       return False
 
-  def get_jurisdicciones(self): 
-      return self.df.loc[ getattr(self.df, "component_type") == "jur", "obj"]
+  def get_jurisdicciones(self) -> list: return self.get_objs("jur")
+  def get_actividades(self) -> list:    return self.get_objs("act")
+  def get_cmsedes(self) -> list:        return self.get_objs("cms")
+  def get_emails(self) -> list:         return self.get_objs("ema")
+  def get_telefonos(self) -> list:      return self.get_objs("tel")
+  def get_relaciones(self) -> list:     return self.get_objs("rel")
+  def get_contribmunis(self) -> list:   return self.get_objs("con")
+  def get_domicilios(self) -> list:     return self.get_objs("dom")
+  def get_impuestos(self) -> list:      return self.get_objs("imp")
+  def get_persona(self) -> list:        return self.get_objs("per")
+
+  def get_objs(self, component_type: str) -> list:
+      if self.is_empty(): return list()
+      return self.df.loc[getattr(self.df, "component_type") == component_type, "obj"] 
 
   orgs = None
 
-  def get_orgs(self):
+  def get_orgs(self) -> set:
       if self.orgs == None: 
          self.orgs = set()
          if self.has_orgs():
-           for orgs in self.df.orgs.unique():
+            for orgs in self.df["orgs"].unique():
                 if not orgs is None:
                    for o in [orgs.strip() for x in orgs.split(',')]:
                        if int(o) > 1 and int(o) not in self.orgs: 
