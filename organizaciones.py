@@ -1,3 +1,6 @@
+COMARB = 900
+COMARB = 900
+
 ORGANIZACIONES = {
   900: { "org": 900, "provincia": -1},
   901: { "org": 901, "provincia":  0},
@@ -10,9 +13,16 @@ ORGANIZACIONES = {
   908: { "org": 908, "provincia":  7},
 }
 
+# TODO: Agregar lista completa de impuestos extra AFIP
+DICT_IMP_ORG = {
+  5900: 900,
+  5901: 901,
+  5902: 902
+}
+
 dict_provincia_org = dict
 
-def get_org_by_provincia(provincia: int):
+def get_org_by_provincia(provincia: int) -> dict:
     if len(dict_provincia_org) == 0:
        for k,v in ORGANIZACIONES: 
            if v.get("provincia") > -1:
