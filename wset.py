@@ -107,6 +107,7 @@ class Wset():
       return None if len(orgs) == 0 else ",".join(orgs)
 
   def get_impuesto( self, org: int = -1, impuesto: int = -1) -> dict:
+      if self.df.empty: return None
       impuestos = self.df.loc[getattr( self.df, "component_type" ) == "imp", "obj"]
       for obj in impuestos:
           if obj["org"] > 1:
@@ -124,3 +125,16 @@ class Wset():
 
   def get_jurisdicciones(self): 
       return self.df.loc[ getattr(self.df, "component_type") == "jur", "obj"]
+
+  orgs = None
+
+  def get_orgs(self):
+      if self.orgs == None: 
+         self.orgs = set()
+         if self.has_orgs():
+           for orgs in self.df.orgs.unique():
+                if not orgs is None:
+                   for o in [orgs.strip() for x in orgs.split(',')]:
+                       if int(o) > 1 and int(o) not in self.orgs: 
+                          self.orgs.add(int(o))
+      return self.orgs

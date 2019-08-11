@@ -54,7 +54,7 @@ DICT_PROVINCIA_ORG = {
 # Try using .loc[row_indexer,col_indexer] = value instead
 pd.options.mode.chained_assignment = None
 
-def txs_append(txs: list, org: int, txt: string): txs.append({"org": org, "tx": txt})
+def txs_append(txs: list, org: int, txt: str): txs.append({"org": org, "tx": txt})
 
 def mk_persona_state( block: int, personaid: int ):
     keypattern = "per:" + str( personaid ) + "#%"
@@ -68,22 +68,26 @@ def inscripto_en_org(state: Wset, changes: Wset, org: int) -> bool:
     state_impuesto   = state.get_impuesto( org=org )
     changes_impuesto = changes.get_impuesto( org=org )
 
-    if  getattr(state_impuesto, "estado", "") == "AC" \
-    and len(changes_impuesto) == 0: 
+    if  state_impuesto.get("estado", "") == "AC" \
+    and (changes_impuesto is None or len(changes_impuesto) == 0): 
         return True
 
-    if  getattr(changes_impuesto, "estado", "") == "AC" \
-    and getattr(changes_impuesto, "isdelete", "") != "T":
+    if  changes_impuesto.get("estado", "") == "AC" \
+    and changes_impuesto.get("isdelete", "") != "T":
         return True
     
     return False   
 
 def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
+
+    if  org not in state.get_orgs() \
+    and org not in changes.get_orgs(): return []
+
     if inscripto_en_org(state, changes, org):
        state_impuesto = state.get_impuesto(org=org)
 
        # MIGRACION o INSCRIPCION
-       if len(state_impuesto) == 0:
+       if state_impuesto is None or len(state_impuesto) == 0:
           txt = "MIGRACON" if changes.has_domicilios( org=org ) else "INSCRIPCION"
           txs.append(txs, org, txt)
           if org == 900:
@@ -93,7 +97,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
           return txs
 
        # REINSCRIPCION
-       if len(state_impuesto) > 0 and state_impuesto["estado"] != "AC":
+       if not state_impuesto is None and state_impuesto.get("estado", "") != "AC":
           txt = "REINSCRIPCION"
           txs_append(txs, org, txt)
           if org == 900:
@@ -116,7 +120,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
           if len(changes_cmsedes) > 0:
              txs_append(txs, 900, "CAMBIO DE SEDE CM")
              for s in changes_cmsedes:
-                 s_org = DICT_PROVINCIA_ORG.get(s.get("provincia"), -1)
+                 s_org = get_org_by_provincia(s.get("provincia"))
                  if s_org != -1: txs_append(txs, s_org, "CAMBIO DE SEDE CM")
     
        changes_actividades = changes.get_activides(org=org)
@@ -145,7 +149,8 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
        print( "changes with orgs: {}".format( changes.count_with_orgs() ) )
        print( changes.get_df().loc[ getattr(changes.get_df(), "orgs").notnull(), ["component_key", "orgs"]] )
 
-    for o in ORGANIZACIONES: txs.append(txs_by_org(state, changes, o.get("org")))
+    for org in ORGANIZACIONES.keys(): 
+        txs.append(txs_by_org(state, changes, org))
 
     return txs
 

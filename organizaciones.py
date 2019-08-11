@@ -9,3 +9,13 @@ ORGANIZACIONES = {
   907: { "org": 907, "provincia":  6},
   908: { "org": 908, "provincia":  7},
 }
+
+dict_provincia_org = dict
+
+def get_org_by_provincia(provincia: int):
+    if len(dict_provincia_org) == 0:
+       for k,v in ORGANIZACIONES: 
+           if v.get("provincia") > -1:
+              dict_provincia_org[v.get("provincia")] = k
+    
+    return dict_provincia_org.get(provincia, -1)
