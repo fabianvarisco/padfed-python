@@ -43,12 +43,6 @@ where block < :block
 and key like :keypattern
 order by key, block desc"""
 
-DICT_PROVINCIA_ORG = {
-  0: 901,
-  2: 902,
-  3: 903,
-}
-  
 # Suppress SettingWithCopyWarning: 
 # A value is trying to be set on a copy of a slice from a DataFrame.
 # Try using .loc[row_indexer,col_indexer] = value instead
@@ -93,11 +87,7 @@ def txs_by_org_componente(txs: list, org: int, name: str, components: list):
        txs_append(txs, org, "CAMBIO EN {} - AFIP".format(name))        
 
 def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
-
     txs = list()
-
-    if  org not in state.get_orgs() \
-    and org not in changes.get_orgs(): return txs
 
     if inscripto_en_org(state, changes, org):
        state_impuesto = state.get_impuesto_by_org(org)
@@ -160,11 +150,8 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
 
     txs = list()
 
-    if  not state.has_orgs() and not changes.has_orgs(): return txs # sin datos jurisdiccionales
-
-    print("personaid {} con datos jurisdiccionales !!!".format( personaid ))
-
-    for org in ORGANIZACIONES.keys(): 
+    for org in state.get_orgs().union(changes.get_orgs()): 
+        print("personaid {} con datos jurisdiccionales !!!".format( personaid ))
         orgs_txs = txs_by_org(state, changes, org)
         if len(orgs_txs) > 0: txs += orgs_txs
 
@@ -204,4 +191,3 @@ if __name__ == '__main__':
       if len(txs) > 0:
          print(name)
          print(txs)
-

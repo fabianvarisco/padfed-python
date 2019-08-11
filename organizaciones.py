@@ -20,7 +20,7 @@ DICT_IMP_ORG = {
   5902: 902
 }
 
-dict_provincia_org = dict
+dict_provincia_org = dict()
 
 def get_org_by_provincia(provincia: int) -> dict:
     if len(dict_provincia_org) == 0:
