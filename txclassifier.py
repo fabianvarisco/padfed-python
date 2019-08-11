@@ -78,6 +78,20 @@ def inscripto_en_org(state: Wset, changes: Wset, org: int) -> bool:
     
     return False   
 
+def txs_by_org_componente(txs: list, org: int, name: str, components: list):
+    if len(components) == 0: return
+
+    has_AFIP_component = False
+    for c in components:
+        c_org = c.get("org", -1)
+        if c_org == org: 
+           txs_append(txs, org, "CAMBIO EN {}".format(name))
+           return
+        if c_org == 1: has_AFIP_component = True
+
+    if has_AFIP_component: 
+       txs_append(txs, org, "CAMBIO EN {} - AFIP".format(name))        
+
 def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
 
     txs = list()
@@ -93,7 +107,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
           txt = "MIGRACON" if changes.has_domicilios( org=org ) else "INSCRIPCION"
           txs.append(txs, org, txt)
           if org == COMARB:
-             tx += " DESDE CM"
+             txt += " DESDE CM"
              for j in changes.get_jurisdicciones(): 
                  txs_append(txs, j.get("org"), txt)
           return txs
@@ -125,9 +139,12 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
                  s_org = get_org_by_provincia(s.get("provincia"))
                  if s_org != -1: txs_append(txs, s_org, "CAMBIO DE SEDE CM")
     
-       changes_actividades = changes.get_actividades()
-       changes_domicilios  = changes.get_domicilios()
-       changes_relaciones  = changes.get_relaciones()
+       txs_by_org_componente(txs, org, "ACTIVIDAD", changes.get_actividades())
+       txs_by_org_componente(txs, org, "DOMICILIO", changes.get_domicilios()) # TODO: un dom tiene varios orgs
+       txs_by_org_componente(txs, org, "RELACION",  changes.get_relaciones())
+       txs_by_org_componente(txs, org, "EMAIL",     changes.get_emails())
+       txs_by_org_componente(txs, org, "TELEFONO",  changes.get_relaciones()) 
+       txs_by_org_componente(txs, org, "DOMIROL",   changes.get_domiroles()) 
 
     return txs
 
@@ -149,7 +166,7 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
 
     for org in ORGANIZACIONES.keys(): 
         orgs_txs = txs_by_org(state, changes, org)
-        if len(orgs_txs) > 0: txs.append(orgs_txs)
+        if len(orgs_txs) > 0: txs += orgs_txs
 
     return txs
 

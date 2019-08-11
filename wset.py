@@ -121,6 +121,7 @@ class Wset():
   def get_domicilios(self) -> list:     return self.get_objs("dom")
   def get_impuestos(self) -> list:      return self.get_objs("imp")
   def get_persona(self) -> list:        return self.get_objs("per")
+  def get_domiroles(self) -> list:      return self.get_objs("dor")
 
   def get_objs(self, component_type: str) -> list:
       if self.is_empty(): return list()
