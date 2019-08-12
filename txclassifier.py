@@ -55,7 +55,7 @@ def mk_persona_state( block: int, personaid: int ):
     res = db.queryall(QUERY_WSET_BY_KEYPATTERN, {"block" : block, "keypattern" : keypattern})
     return Wset(res).resolve_state().extend()  
 
-def inscripto_en_org(state_impuesto: dict, changes_impuesto: dict) -> bool:
+def inscripcion_alta(state_impuesto: dict, changes_impuesto: dict) -> bool:
 
     if  state_impuesto.get("estado", "") == "AC" \
     and len(changes_impuesto) == 0: 
@@ -67,19 +67,23 @@ def inscripto_en_org(state_impuesto: dict, changes_impuesto: dict) -> bool:
     
     return False   
 
-def txs_by_org_componente(txs: list, org: int, name: str, components: list):
+def txs_by_component(txs: list, org: int, name: str, components: list, extrict: bool = False):
     if len(components) == 0: return
-
-    has_AFIP_component = False
+    
+    if not extrict:
+       txs_append(txs, org, "CAMBIO EN {}".format(name))
+       return
+      
+    # Extrict Mode
     for c in components:
-        c_org = c.get("org", -1)
-        if c_org == org: 
+        if c.get("org", -1) == org: 
            txs_append(txs, org, "CAMBIO EN {}".format(name))
            return
-        if c_org == 1: has_AFIP_component = True
 
-    if has_AFIP_component: 
-       txs_append(txs, org, "CAMBIO EN {} - AFIP".format(name))        
+def txs_by_persona(state_persona, changes_persona):
+    if len(state_persona) == 0 or len(changes_persona) == 0: return
+    # TODO: buscar cambios en razon social, nombre, apellido, estadoid
+    return 
 
 def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
     txs = list()
@@ -87,7 +91,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
     state_impuesto   = state.get_impuesto_by_org(org)
     changes_impuesto = changes.get_impuesto_by_org(org)
 
-    if inscripto_en_org(state_impuesto, changes_impuesto):
+    if inscripcion_alta(state_impuesto, changes_impuesto):
 
        # MIGRACION o INSCRIPCION
        if len(state_impuesto) == 0: # No estaba inscripto
@@ -112,27 +116,30 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
     
        if org == COMARB:
           # CAMBIO DE JURISDICCION CM
-          changes_jurisdicciones = changes.get_jurisdicciones()
-          if len(changes_jurisdicciones) > 0:
+          rows = changes.get_jurisdicciones()
+          if len(rows) > 0:
              txs_append(txs, COMARB, "CAMBIO JURISDICCION CM")
-             for j in changes_jurisdicciones:
+             for j in rows:
                  txs_append(txs, j.get("org"), "CAMBIO JURISDICCION CM")
  
-          # CAMBIO DE JURISDICCION CM
-          changes_cmsedes = changes.get_cmsedes()
-          if len(changes_cmsedes) > 0:
+          # CAMBIO DE SEDE CM
+          rows = changes.get_cmsedes()
+          if len(rows) > 0:
              txs_append(txs, COMARB, "CAMBIO DE SEDE CM")
-             for s in changes_cmsedes:
+             for s in rows:
                  s_org = get_org_by_provincia(s.get("provincia"))
                  if s_org != -1: txs_append(txs, s_org, "CAMBIO DE SEDE CM")
-    
-       txs_by_org_componente(txs, org, "ACTIVIDAD", changes.get_actividades())
-       txs_by_org_componente(txs, org, "DOMICILIO", changes.get_domicilios()) # TODO: un dom tiene varios orgs
-       txs_by_org_componente(txs, org, "RELACION",  changes.get_relaciones())
-       txs_by_org_componente(txs, org, "EMAIL",     changes.get_emails())
-       txs_by_org_componente(txs, org, "TELEFONO",  changes.get_relaciones()) 
-       txs_by_org_componente(txs, org, "DOMIROL",   changes.get_domiroles()) 
 
+    txs_by_persona(  txs, changes.get_persona())
+    txs_by_component(txs, org, "IMPUESTO",  changes.get_impuestos(), extrict=True)
+    txs_by_component(txs, org, "ACTIVIDAD", changes.get_actividades())
+    txs_by_component(txs, org, "DOMICILIO", changes.get_domicilios()) # TODO: Verificar si el dom tiene rol jurisdiccional
+    txs_by_component(txs, org, "RELACION",  changes.get_relaciones())
+    txs_by_component(txs, org, "EMAIL",     changes.get_emails())
+    txs_by_component(txs, org, "TELEFONO",  changes.get_relaciones()) 
+    txs_by_component(txs, org, "DOMIROL",   changes.get_domiroles()) 
+
+    # TODO: Detectar cambio de socio !!!!!!!!
     return txs
 
 def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFrame) -> list:
@@ -144,6 +151,8 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
     if not state.has_orgs(): state = Wset() 
 
     changes = Wset(changes).extend()
+
+    changes.reduce(state)
 
     txs = list()
 

@@ -43,12 +43,19 @@ class Wset():
          self.df = self.df[self.df["isdelete"] != "T"]
       return self
 
-  # Add columns obj and orgs
+  # Add obj column (json.loads(value)) 
   def extend(self):
       if not self.df.empty:
          self.df["obj"] = self.df.apply(lambda row: None if row.value is None or not isinstance(row.value, str) else json.loads(row.value), axis=1)
          for row in self.df.itertuples(): 
              self.scan_row(row.component_type, row.obj)
+      return self
+
+  # Delete dummies changes(state == change)
+  def reduce(self, state):
+      if self.df.empty or state.is_empty(): return
+      
+      pd.merge(self.df, state.get_df(), on=["key","obj"], how='left', ignore_index=True)      
       return self
 
   def get_df(self) -> pd.DataFrame: return self.df
@@ -90,6 +97,7 @@ class Wset():
           if o.get("org") > 1 and (o.obj("org") == org or org == -1): return True
       return False
 
+  def get_persona(self) -> list:        return self.get_objs("per")
   def get_jurisdicciones(self) -> list: return self.get_objs("jur")
   def get_actividades(self) -> list:    return self.get_objs("act")
   def get_cmsedes(self) -> list:        return self.get_objs("cms")
