@@ -51,13 +51,15 @@ class Wset():
              self.scan_row(row.component_type, row.obj)
       return self
 
+  # TODO: Usar drop
   # Delete dummies changes(state == change)
+  # https://stackoverflow.com/questions/54219055/how-to-remove-rows-from-pandas-dataframe-if-the-same-row-exists-in-another-dataf
   def reduce(self, state):
       if self.df.empty or state.is_empty(): return
-
-      m = pd.merge(self.df, state.get_df(), on=["key","value"], how='inner')
-      if len( m ) == 0:
-         print( "sin join")
+#
+      #m = pd.merge(self.df, state.get_df(), on=["key","value"], how='inner')
+      #if len( m ) == 0:
+      #   print( "sin join")
       return self
 
   def get_df(self) -> pd.DataFrame: return self.df
