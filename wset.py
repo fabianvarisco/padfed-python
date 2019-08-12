@@ -68,7 +68,7 @@ class Wset():
          return
       
       if component_type in ['imp', 'con']: 
-         org = DICT_IMP_ORG.get(obj.get("impuesto", -1), 1)
+         org = DEF_IMPUESTOS.get(obj.get("impuesto", -1), 1)
          obj["org"] = org # Add org to impuesto or contribmuni
          if org > 1: self.add_org(org)
          return
