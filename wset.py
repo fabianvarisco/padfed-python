@@ -8,7 +8,9 @@ class Wset():
 
   BASE_COLUMNS = ['block', 'txseq', 'item', 'key', 'value', 'isdelete']
 
-  def __init__(self, src=None):  
+  def __init__(self, src=None): 
+    
+      self.target_orgs = set()
 
       if src is None or len(src) == 0:
          self.df = pd.DataFrame()  
@@ -40,12 +42,11 @@ class Wset():
       return self
 
   # Add columns obj and orgs
-  def extend(self, state: pd.DataFrame = None):
+  def extend(self, state = None):
       if not self.df.empty:
-         self.df["obj"]  = self.df.apply(lambda row: None if row.value is None or not isinstance( row.value, str ) else json.loads( row.value ), axis=1 )             
-         self.state = state
-         self.df["orgs"] = self.df.apply(lambda row: self.resolve_orgs( row.component_type, row.obj ), axis=1 )
-         self.state = None
+         self.df["obj"] = self.df.apply(lambda row: None if row.value is None or not isinstance( row.value, str ) else json.loads( row.value ), axis=1)
+         for row in self.df.itertuples(): 
+             self.add_orgs(row.component_type, row.obj, state)
       return self
 
   def get_df(self) -> pd.DataFrame: return self.df
@@ -58,47 +59,44 @@ class Wset():
       except:
         return 0
 
-  def has_orgs(self) -> bool:
-      return self.count_with_orgs() > 0
+  def add_orgs(self, component_type: str, obj: dict, state):
 
-  def count_with_orgs(self) -> int:
-      try:
-        return self.df["orgs"].count()
-      except: 
-        return 0  
-
-  def resolve_orgs(self, component_type: str, obj: dict ) -> str:
+      if obj is None: return
     
-      if component_type == 'cms': return str(COMARB)
+      if component_type == 'cms': 
+         self.add_org(COMARB)
+         return
       
-      if component_type in [ 'imp', 'con' ]: 
-         org = DICT_IMP_ORG.get( obj.get( "impuesto", -1 ), 1 )
+      if component_type in ['imp', 'con']: 
+         org = DICT_IMP_ORG.get(obj.get("impuesto", -1), 1)
          obj["org"] = org # Add org to impuesto or contribmuni
-         return None if org == 1 else str( org )
+         if org > 1: self.add_org(org)
+         return
       
-      if component_type in [ 'jur', 'act', 'dom', 'dor' ]: 
-         if obj.get("org", -1) > 1: return str( obj.get( "org" ) )
+      if component_type in ['jur', 'act', 'dom', 'dor']: 
+         if obj.get("org", -1) > 1: 
+            self.add_org(obj.get("org"))
+            return
       
-      if self.state is None \
-      or self.state.empty \
-      or component_type != 'dom': return None
+      if state is None \
+      or state.is_empty() \
+      or component_type != 'dom': return 
       
       # dom de AFIP: en el state puede
       # tener relaciones con roles de distintas orgs
-      state_roles = self.state.loc[ self.state["component_type"] == "dor", "obj"]
-
-      if state_roles.empty: return None
+      state_roles = state.get_domiroles()
         
-      orgs = set()
+      domi_orgs = set()
 
       for rol in state_roles:
           if  rol.get("org", -1 ) > 1 \
-          and rol.get("org") not in orgs \
+          and rol.get("org") not in domi_orgs \
           and rol.get("tipo",  -1) == obj.get("tipo",  -2) \
           and rol.get("orden", -1) == obj.get("orden", -2):
-              orgs.add(rol.get("org"))
+              domi_orgs.add(rol.get("org"))
+              self.add_org(rol.get("org"))
         
-      return None if len(orgs) == 0 else ",".join(orgs)
+      if len(domi_orgs) > 0: obj["orgs"] = domi_orgs
 
   def get_impuesto_by_org(self, org: int) -> dict:
       for o in self.get_impuestos(): 
@@ -127,15 +125,11 @@ class Wset():
       if self.is_empty(): return list()
       return self.df.loc[getattr(self.df, "component_type") == component_type, "obj"] 
 
-  orgs = None
+  def add_org(self, org: int): 
+      if not org in self.target_orgs: self.target_orgs.add(org)         
 
-  def get_orgs(self) -> set:
-      if self.orgs == None: 
-         self.orgs = set()
-         if self.has_orgs():
-            for orgs in self.df["orgs"].unique():
-                if not orgs is None:
-                   for o in [orgs.strip() for x in orgs.split(',')]:
-                       if int(o) > 1 and int(o) not in self.orgs: 
-                          self.orgs.add(int(o))
-      return self.orgs
+  def get_orgs(self) -> set: 
+      return self.target_orgs
+
+  def has_orgs(self) -> bool: 
+      return len(self.target_orgs) > 0
