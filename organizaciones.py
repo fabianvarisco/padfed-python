@@ -1,16 +1,33 @@
 COMARB = 900
-COMARB = 900
 
 ORGANIZACIONES = {
-  900: { "org": 900, "provincia": -1},
-  901: { "org": 901, "provincia":  0},
-  902: { "org": 902, "provincia":  1},
-  903: { "org": 903, "provincia":  2},
-  904: { "org": 904, "provincia":  3},
-  905: { "org": 905, "provincia":  4},
-  906: { "org": 906, "provincia":  5},
-  907: { "org": 907, "provincia":  6},
-  908: { "org": 908, "provincia":  7},
+1:   { "org":1,   "name":"AFIP"                       "cuit":33693450239, "provincia": -1 }, 
+100: { "org":100, "name":"MULTI ORGANISMOS"           "cuit":-1           "provincia": -1 },          
+900: { "org":900, "name":"COMISION ARBITRAL",         "cuit":30658892718, "provincia": -1 },  
+901: { "org":901, "name":"IP - CABA",                 "cuit":34999032089, "provincia": 0  },
+902: { "org":902, "name":"BA - BUENOS AIRES",         "cuit":30710404611, "provincia": 1  },
+903: { "org":903, "name":"AGR - CATAMARCA",           "cuit":30668085837, "provincia": 2  },
+904: { "org":904, "name":"TAS CORDOBA",               "cuit":30999256712, "provincia": 3  },
+905: { "org":905, "name":"DGR - CORRIENTES",          "cuit":30709110078, "provincia": 4  },
+906: { "org":906, "name":"DGR - CHACO",               "cuit":33999176769, "provincia": 16 },
+907: { "org":907, "name":"DGR - CHUBUT",              "cuit":30670499584, "provincia": 17 },
+908: { "org":908, "name":"ATER - ENTRE RIOS",         "cuit":30712147829, "provincia": 5  },
+909: { "org":909, "name":"DGR - FORMOSA",             "cuit":30671355942, "provincia": 18 },
+910: { "org":910, "name":"DPR - JUJUY",               "cuit":30671485706, "provincia": 6  },
+911: { "org":911, "name":"DGR - LA PAMPA",            "cuit":30999278139, "provincia": 21 },
+912: { "org":912, "name":"DGIP - LA RIOJA",           "cuit":30671853535, "provincia": 18 },
+913: { "org":913, "name":"ATM - MENDOZA",             "cuit":30713775505, "provincia": 7  },
+914: { "org":914, "name":"DGR - MISIONES",            "cuit":30672387120, "provincia": 19 },
+915: { "org":915, "name":"DPR - NEUQUEN",             "cuit":30707519092, "provincia": 20 },
+916: { "org":916, "name":"DGR - RIO NEGRO",           "cuit":30712264485, "provincia": 22 },
+917: { "org":917, "name":"DGR - SALTA",               "cuit":30711020264, "provincia": 9  },
+918: { "org":918, "name":"DGR - SAN JUAN",            "cuit":30999015162, "provincia": 10 },
+919: { "org":919, "name":"DPIP - SAN LUIS",           "cuit":30673377544, "provincia": 11 },
+920: { "org":920, "name":"ASIP - SANTA CRUZ",         "cuit":30673639603, "provincia": 23 },
+921: { "org":921, "name":"API - SANTA FE",            "cuit":30655200173, "provincia": 12 },
+922: { "org":922, "name":"DGR - SANTIAGO DEL ESTERO", "cuit":30999164990, "provincia": 19 },
+923: { "org":923, "name":"DGR - TIERRA DEL FUEGO",    "cuit":30715123238, "provincia": 24 },
+924: { "org":924, "name":"DGR - TUCUMAN",             "cuit":30675428081, "provincia": 23 },
 }
 
 # TODO: Agregar lista completa de impuestos extra AFIP
