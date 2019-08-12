@@ -10,7 +10,9 @@ class Wset():
 
   def __init__(self, src=None): 
     
+      # Instance variables
       self.target_orgs = set()
+      self.migration_orgs = set()
 
       if src is None or len(src) == 0:
          self.df = pd.DataFrame()  
@@ -42,11 +44,11 @@ class Wset():
       return self
 
   # Add columns obj and orgs
-  def extend(self, state = None):
+  def extend(self):
       if not self.df.empty:
-         self.df["obj"] = self.df.apply(lambda row: None if row.value is None or not isinstance( row.value, str ) else json.loads( row.value ), axis=1)
+         self.df["obj"] = self.df.apply(lambda row: None if row.value is None or not isinstance(row.value, str) else json.loads(row.value), axis=1)
          for row in self.df.itertuples(): 
-             self.add_orgs(row.component_type, row.obj, state)
+             self.scan_row(row.component_type, row.obj)
       return self
 
   def get_df(self) -> pd.DataFrame: return self.df
@@ -59,49 +61,28 @@ class Wset():
       except:
         return 0
 
-  def add_orgs(self, component_type: str, obj: dict, state):
+  def scan_row(self, component_type: str, obj: dict):
 
       if obj is None: return
     
       if component_type == 'cms': 
-         self.add_org(COMARB)
-         return
+         self.add_target_org(COMARB)
       
-      if component_type in ['imp', 'con']: 
-         org = DEF_IMPUESTOS.get(obj.get("impuesto", -1), 1)
-         obj["org"] = org # Add org to impuesto or contribmuni
-         if org > 1: self.add_org(org)
-         return
+      elif component_type in ['imp', 'con']: 
+           org = DEF_IMPUESTOS.get(obj.get("impuesto", -1), 1)
+           obj["org"] = org # Add org to impuesto or contribmuni
+           if org > 1:
+              self.add_target_org(org)
       
-      if component_type in ['jur', 'act', 'dom', 'dor']: 
-         if obj.get("org", -1) > 1: 
-            self.add_org(obj.get("org"))
-            return
+      elif component_type in ['jur', 'act', 'dom', 'dor']: 
+           if obj.get("org", -1) > 1: 
+              # si estas tablas tienen org > 1 entonces sus datos fueron migrados 
+              self.add_migration_org(obj.get("org")) 
+              self.add_target_org(obj.get("org"))
       
-      if state is None \
-      or state.is_empty() \
-      or component_type != 'dom': return 
-      
-      # dom de AFIP: en el state puede
-      # tener relaciones con roles de distintas orgs
-      state_roles = state.get_domiroles()
-        
-      domi_orgs = set()
-
-      for rol in state_roles:
-          if  rol.get("org", -1 ) > 1 \
-          and rol.get("org") not in domi_orgs \
-          and rol.get("tipo",  -1) == obj.get("tipo",  -2) \
-          and rol.get("orden", -1) == obj.get("orden", -2):
-              domi_orgs.add(rol.get("org"))
-              self.add_org(rol.get("org"))
-        
-      if len(domi_orgs) > 0: obj["orgs"] = domi_orgs
-
   def get_impuesto_by_org(self, org: int) -> dict:
       for o in self.get_impuestos(): 
-          if o.get("org") == org: 
-             return o
+          if o.get("org") == org: return o
       return dict()
   
   def has_domicilios(self, org: int = -1) -> bool:
@@ -125,7 +106,7 @@ class Wset():
       if self.is_empty(): return list()
       return self.df.loc[getattr(self.df, "component_type") == component_type, "obj"] 
 
-  def add_org(self, org: int): 
+  def add_target_org(self, org: int): 
       if not org in self.target_orgs: self.target_orgs.add(org)         
 
   def get_orgs(self) -> set: 
@@ -133,3 +114,9 @@ class Wset():
 
   def has_orgs(self) -> bool: 
       return len(self.target_orgs) > 0
+
+  def add_migration_org(self, org: int):
+      if not org in self.migration_orgs: self.migration_orgs.add(org) 
+
+  def from_migration(self, org: int) -> bool:
+      return org in self.migration_orgs

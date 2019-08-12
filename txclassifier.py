@@ -55,12 +55,7 @@ def mk_persona_state( block: int, personaid: int ):
     res = db.queryall(QUERY_WSET_BY_KEYPATTERN, {"block" : block, "keypattern" : keypattern})
     return Wset(res).resolve_state().extend()  
 
-def inscripto_en_cm(state: Wset, changes: Wset) -> bool:
-    return inscripto_en_org(state, changes, 900)
-
-def inscripto_en_org(state: Wset, changes: Wset, org: int) -> bool:
-    state_impuesto   = state.get_impuesto_by_org(org)
-    changes_impuesto = changes.get_impuesto_by_org(org)
+def inscripto_en_org(state_impuesto: dict, changes_impuesto: dict) -> bool:
 
     if  state_impuesto.get("estado", "") == "AC" \
     and len(changes_impuesto) == 0: 
@@ -89,12 +84,14 @@ def txs_by_org_componente(txs: list, org: int, name: str, components: list):
 def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
     txs = list()
 
-    if inscripto_en_org(state, changes, org):
-       state_impuesto = state.get_impuesto_by_org(org)
+    state_impuesto   = state.get_impuesto_by_org(org)
+    changes_impuesto = changes.get_impuesto_by_org(org)
+
+    if inscripto_en_org(state_impuesto, changes_impuesto):
 
        # MIGRACION o INSCRIPCION
-       if len(state_impuesto) == 0:
-          txt = "MIGRACON" if changes.has_domicilios( org=org ) else "INSCRIPCION"
+       if len(state_impuesto) == 0: # No estaba inscripto
+          txt = "MIGRACON" if changes.from_migration(org) else "INSCRIPCION"
           txs.append(txs, org, txt)
           if org == COMARB:
              txt += " DESDE CM"
@@ -146,7 +143,7 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
     # Si el state no tiene datos jurisdiccionales lo vacia
     if not state.has_orgs(): state = Wset() 
 
-    changes = Wset(changes).extend(state)
+    changes = Wset(changes).extend()
 
     txs = list()
 
