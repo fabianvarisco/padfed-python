@@ -99,8 +99,9 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
           txs_append(txs, org, txt)
           if org == COMARB:
              txt += " DESDE CM"
-             for j in changes.get_jurisdicciones(): 
-                 txs_append(txs, j.get("org"), txt)
+             for j in changes.get_jurisdicciones():
+                 o = get_org_by_provincia(j.get("provincia", -1))
+                 if o > -1: txs_append(txs, o, txt)
           return txs
 
        # REINSCRIPCION
@@ -110,8 +111,9 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
           if org == COMARB:
              txt += " DESDE CM"
              for j in changes.get_jurisdicciones(): 
-                 if j.get("hasta", None) is None:
-                    txs_append(txs, j.get("org"), txt)
+                 if j.get("estado", "") == "AC":
+                    o = get_org_by_provincia(j.get("provincia", -1))
+                    if o > -1: txs_append(txs, j.get("org"), txt)
           return txs
     
        if org == COMARB:
