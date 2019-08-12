@@ -54,8 +54,10 @@ class Wset():
   # Delete dummies changes(state == change)
   def reduce(self, state):
       if self.df.empty or state.is_empty(): return
-      
-      pd.merge(self.df, state.get_df(), on=["key","obj"], how='left', ignore_index=True)      
+
+      m = pd.merge(self.df, state.get_df(), on=["key","value"], how='inner')
+      if len( m ) == 0:
+         print( "sin join")
       return self
 
   def get_df(self) -> pd.DataFrame: return self.df

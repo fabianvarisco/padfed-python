@@ -96,7 +96,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
        # MIGRACION o INSCRIPCION
        if len(state_impuesto) == 0: # No estaba inscripto
           txt = "MIGRACON" if changes.from_migration(org) else "INSCRIPCION"
-          txs.append(txs, org, txt)
+          txs_append(txs, org, txt)
           if org == COMARB:
              txt += " DESDE CM"
              for j in changes.get_jurisdicciones(): 
@@ -164,8 +164,11 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
     return txs
 
 USER = 'HLF'
+USER = 'BC_ROSI'
 PASSW = 'HLF'
+PASSW = 'BC_ROSI'
 URLDB = 'localhost/xe'
+URLDB='10.30.205.101/padr'
 
 ###################################################################    
 
@@ -184,7 +187,8 @@ if __name__ == '__main__':
 
   block = 53319
   block = 53401
-  block = 53410
+  block = 228802
+  block = 228567
 
   res = db.queryall( QUERY_WSET_BY_BLOCK, { "block" : block } )
 
