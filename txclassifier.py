@@ -56,9 +56,9 @@ from hlf.bc_valid_tx_write_set
 """
 
 def select_max_block() -> int:
-    print("getting max block from db...")
     res = db.queryone(QUERY_MAX_BLOCK)
     if len(res) == 0: raise ValueError("HLF.BC_VALID_TX_WRITE_SET is empty")
+    logger.debug("fetched max_block {} from db ...".format(res[0]))
     return res[0]
 
 # Suppress SettingWithCopyWarning: 
@@ -66,7 +66,8 @@ def select_max_block() -> int:
 # Try using .loc[row_indexer,col_indexer] = value instead
 pd.options.mode.chained_assignment = None
 
-def txs_append(txs: list, org: int, txt: str): txs.append({"block": None, "txseq": None, "personaid": None, "org": org, "kind": txt})
+def txs_append(txs: list, org: int, txt: str): 
+    txs.append({"block": None, "txseq": None, "personaid": None, "org": org, "kind": txt})
 
 def mk_persona_state( block: int, personaid: int ):
     keypattern = "per:" + str( personaid ) + "#%"
@@ -162,7 +163,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
     # TODO: Detectar cambio de socio !!!!!!!!
     return txs
 
-def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFrame) -> list:
+def process_txpersona(block: int, target_orgs: set, txseq: int, personaid: int, changes: pd.DataFrame) -> list:
     logger.debug("processing block {} txseq {} personaid {} ...".format(block, txseq, personaid))
 
     state = mk_persona_state(block, personaid)
@@ -174,13 +175,17 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
 
     txs = list()
 
-    for org in state.get_orgs().union(changes.get_orgs()): 
+    orgs = state.get_orgs().union(changes.get_orgs())
+
+    if len(target_orgs) > 0: orgs = orgs.intersection(target_orgs)
+
+    for org in orgs: 
         orgs_txs = txs_by_org(state, changes, org)
         if len(orgs_txs) > 0: txs += orgs_txs
 
     return txs
 
-def process_block(block: int) -> list:
+def process_block(block: int, target_orgs: set) -> list:
     logger.debug("processing block {} ...".format(block))
 
     res = db.queryall(QUERY_WSET_BY_BLOCK, {"block" : block})
@@ -188,13 +193,13 @@ def process_block(block: int) -> list:
     txs = list()
 
     if len(res) == 0: 
-       txs.append({"block": block, "txseq": None, "personaid": None, "org": None, "kind": "non-existing or empty blok"})
+       logger.debug("block {} non-existing or empty".format(block))
        return txs
- 
+
     for name, group in Wset(res).groupby_tx_personaid():
         txseq     = name[0] 
         personaid = name[1]
-        for tx in process_txpersona(block, txseq, personaid, group):
+        for tx in process_txpersona(block, target_orgs, txseq, personaid, group):
             tx["block"] = block
             tx["txseq"] = txseq
             tx["personaid"] = personaid
@@ -207,21 +212,40 @@ def config_getint(config, section: str, option: str) -> int:
     except:
       return -1
 
+def config_target_orgs(config, section: str, option: str) -> set:
+    target_orgs = {}
+    try:
+       target_orgs = json.loads(config.get(section, option))
+       target_orgs = set(target_orgs) # array
+    except:
+       try:
+          target_orgs = {target_orgs} # single
+       except:
+          return {} # empty set
+
+    for o in target_orgs:
+        if o < COMARB:
+           raise ValueError("Config: section [{}] option [{}] org [{}] invalid".format(section, option, o))
+        if not o in DEF_ORGANIZACIONES.keys():
+           raise ValueError("Config: section [{}] option [{}] org [{}] invalid".format(section, option, o))        
+
+    return target_orgs
+
 def save_config(filename: str, config, block: int):
-    logger.debug("saving config file {} with block_proceseed {} ...".format(filename, block))
+    logger.debug("saving config file [{}] with block_proceseed [{}] ...".format(filename, block))
     config["filters"]["block_processed"] = str(block)
-    with open(filename, 'w') as f: config.write(f)
+    with open(filename, 'w') as f: config.write(f) 
 
 def config_logging(level: str):
     handler = logging.StreamHandler()
-    formatter = logging.Formatter("%(asctime)s %(name)-12s %(levelname)-8s %(message)s")
+    formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG if level.lower() == "debug" else logging.INFO)
 
 db: db_access
 
-###################################################################    
+# MAIN #############################################################    
 
 if __name__ == '__main__':
 
@@ -233,7 +257,7 @@ if __name__ == '__main__':
   config = configparser.ConfigParser()
   config.read(config_file_name)
   
-  ll = config["behaviour"]["logging_level"]
+  ll = config["behaviour"].get("logging_level", "INFO")
   config_logging(ll)
 
   user            = config["db"]["user"]
@@ -242,23 +266,38 @@ if __name__ == '__main__':
   block_start     = config_getint(config, "filters", "block_start")
   block_stop      = config_getint(config, "filters", "block_stop")
   block_processed = config_getint(config, "filters", "block_processed")
+  target_orgs     = config_target_orgs(config, "behaviour", "target_orgs")
 
   if  block_processed > -1:
       if block_processed < block_start: 
-         raise ValueError("Config: block_processed {} must be greater than or equal to block_start {}".format(block_processed, block_start))
-      block_start = block_processed + 1
+         raise ValueError("Config: section [{}] block_processed {} must be greater than or equal to block_start {}".format("filters", block_processed, block_start))
 
   if  block_stop > -1 and block_stop < block_start: 
-      raise ValueError("Config: block_stop {} must be greater than or equal to block_start {}".format(block_processed, block_start))
+      raise ValueError("Config: section [{}] block_stop {} must be greater than or equal to block_start {}".format("filters", block_stop, block_start))
+
+  if  block_processed > -1 \
+  and block_stop > -1 \
+  and block_stop < block_processed: 
+      raise ValueError("Config: section [{}] block_stop {} must be greater than or equal to block_processed {}".format("filters", block_stop, block_processed))
 
   db = db_access(user, password, url)
 
-  if block_stop == -1: block_stop = select_max_block()
+  if block_stop == -1: 
+     max_block = select_max_block()
+     if block_processed > max_block:
+        raise ValueError("Config: section [{}] block_processed {} must be less than db max_block {}".format("filters", block_processed, max_block))
+     if block_processed == -1 and block_start > max_block:
+        raise ValueError("Config: section [{}] block_start {} must be less than max_block {}".format("filters", block_start, max_block))
+     block_stop = max_block
 
+  if block_processed > -1: block_start = block_processed
+   
   i = 0
   logger.info("processing from block {} to {} ...".format(block_start, block_stop))
   for block in range(block_start, block_stop+1):
-      for tx in process_block(block): print(tx)
+      for tx in process_block(block, target_orgs): print(tx)
+      block_processed = block
       i += 1
-      if i % 100 == 0: save_config(config_file_name, config, block)
-  save_config(config_file_name, config, block)
+      if i % 100 == 0: save_config(config_file_name, config, block_processed)
+
+  save_config(config_file_name, config, block_processed)

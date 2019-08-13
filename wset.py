@@ -81,14 +81,19 @@ class Wset():
       elif component_type in ['imp', 'con']: 
            org = DEF_IMPUESTOS.get(obj.get("impuesto", -1), 1)
            obj["org"] = org # Add org to impuesto or contribmuni
-           if org > 1:
-              self.add_target_org(org)
+           if org > 1: self.add_target_org(org)
       
       elif component_type in ['jur', 'act', 'dom', 'dor']: 
-           if obj.get("org", -1) > 1: 
-              # si estas tablas tienen org > 1 entonces sus datos fueron migrados 
-              self.add_migration_org(obj.get("org")) 
-              self.add_target_org(obj.get("org"))
+           org = obj.get("org", -1)
+           if org > 1: 
+              # si estas tablas tienen org > 1, entonces sus datos fueron migrados 
+              self.add_migration_org(org) 
+              self.add_target_org(org)
+
+           if org == COMARB and component_type == 'jur':
+              # si la org es COMARB, entonces la provincia corresponde a otra org
+              org = get_org_by_provincia(obj.get("provincia", -1))
+              if org > 1: self.add_target_org(org)
       
   def get_impuesto_by_org(self, org: int) -> dict:
       for o in self.get_impuestos(): 
