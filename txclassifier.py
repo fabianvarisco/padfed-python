@@ -1,10 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import sys    
+import os    
+import configparser
+import logging
+  
 import cx_Oracle
 import pandas as pd
-import os
+
 from wset import *
 from organizaciones import *
+
+logger = logging.getLogger()
 
 # Oracle Data access
 class db_access:
@@ -21,7 +28,7 @@ class db_access:
       if cur is not None: cur.close()
       if cnx is not None: self.pool.release(cnx)
 
-  def queryone(self, query: str,  vars: dict):
+  def queryone(self, query: str,  vars: dict = {}):
     try:
       cnx = self.pool.acquire()
       cur = cnx.cursor()
@@ -42,6 +49,17 @@ from hlf.bc_valid_tx_write_set
 where block < :block
 and key like :keypattern
 order by key, block desc"""
+
+QUERY_MAX_BLOCK = """
+select max(block) as max_block
+from hlf.bc_valid_tx_write_set
+"""
+
+def select_max_block() -> int:
+    print("getting max block from db...")
+    res = db.queryone(QUERY_MAX_BLOCK)
+    if len(res) == 0: raise ValueError("HLF.BC_VALID_TX_WRITE_SET is empty")
+    return res[0]
 
 # Suppress SettingWithCopyWarning: 
 # A value is trying to be set on a copy of a slice from a DataFrame.
@@ -145,7 +163,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
     return txs
 
 def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFrame) -> list:
-    print("processing block {} txseq {} personaid {} ...".format(block, txseq, personaid))
+    logger.debug("processing block {} txseq {} personaid {} ...".format(block, txseq, personaid))
 
     state = mk_persona_state(block, personaid)
 
@@ -163,7 +181,7 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
     return txs
 
 def process_block(block: int) -> list:
-    print("processing block {} ...".format(block))
+    logger.debug("processing block {} ...".format(block))
 
     res = db.queryall(QUERY_WSET_BY_BLOCK, {"block" : block})
 
@@ -182,16 +200,24 @@ def process_block(block: int) -> list:
             tx["personaid"] = personaid
             txs.append(tx)
     return txs
-        
 
-"""
-USER = 'HLF'
-PASSW = 'HLF'
-URLDB = 'localhost/xe'
-"""
-USER = 'BC_ROSI'
-PASSW = 'BC_ROSI'
-URLDB='10.30.205.101/padr'
+def config_getint(config, section: str, option: str) -> int:
+    try:
+      return config.getint(section, option)
+    except:
+      return -1
+
+def save_config(filename: str, config, block: int):
+    logger.debug("saving config file {} with block_proceseed {} ...".format(filename, block))
+    config["filters"]["block_processed"] = str(block)
+    with open(filename, 'w') as f: config.write(f)
+
+def config_logging(level: str):
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("%(asctime)s %(name)-12s %(levelname)-8s %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG if level.lower() == "debug" else logging.INFO)
 
 db: db_access
 
@@ -199,27 +225,40 @@ db: db_access
 
 if __name__ == '__main__':
 
-  # user = os.getenv('PUC_DB_USER', 'puc')
-  # passwd = os.getenv('PUC_DB_PASSWORD', 'escorpio1')
-  # host = os.getenv('PUC_DB_HOST', '10.30.205.101')
-  # port = os.getenv('PUC_DB_PORT', '1521')
-  # sid = os.getenv('PUC_DB_SID', 'padr')
-  # url = "%s:%s/%s"%(host, port, sid)
+  script_name = os.path.basename(sys.argv[0])
+  print("{} running ...".format(script_name))
 
-  print("running ...")
-
-  db = db_access(USER, PASSW, URLDB)
-
-  block = 53319
-  block = 53401
-  block = 53410
-  #block = 228567
-  block_start = 228566
-  block_start = 228570
-  block_start = 228802
-  block_stop = 229094
-  block_start = block_stop = 229086
+  config_file_name = "{}.ini".format(script_name.split(".")[0])
+  print("reading config from {} ...".format(config_file_name))
+  config = configparser.ConfigParser()
+  config.read(config_file_name)
   
+  ll = config["behaviour"]["logging_level"]
+  config_logging(ll)
+
+  user            = config["db"]["user"]
+  password        = config["db"]["password"]
+  url             = config["db"]["url"]
+  block_start     = config_getint(config, "filters", "block_start")
+  block_stop      = config_getint(config, "filters", "block_stop")
+  block_processed = config_getint(config, "filters", "block_processed")
+
+  if  block_processed > -1:
+      if block_processed < block_start: 
+         raise ValueError("Config: block_processed {} must be greater than or equal to block_start {}".format(block_processed, block_start))
+      block_start = block_processed + 1
+
+  if  block_stop > -1 and block_stop < block_start: 
+      raise ValueError("Config: block_stop {} must be greater than or equal to block_start {}".format(block_processed, block_start))
+
+  db = db_access(user, password, url)
+
+  if block_stop == -1: block_stop = select_max_block()
+
+  i = 0
+  logger.info("processing from block {} to {} ...".format(block_start, block_stop))
   for block in range(block_start, block_stop+1):
-      for tx in process_block(block): 
-          print(tx)
+      for tx in process_block(block): print(tx)
+      i += 1
+      if i % 100 == 0: save_config(config_file_name, config, block)
+  save_config(config_file_name, config, block)
