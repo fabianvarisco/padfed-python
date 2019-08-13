@@ -25,7 +25,7 @@ class Wset():
          component = new[1].str.split(":", n=1, expand=True)
          self.df["personaid"]      = personaid[1].astype( int )
          self.df["component_type"] = component[0].astype( str ) # ej: dom
-         self.df["component_key"]  = component[1].astype( str ) # ej: 1.3.10, vamos a tratar de no usuar la key . mejor procesar el value json
+#        self.df["component_key"]  = component[1].astype( str ) # ej: 1.3.10, vamos a tratar de no usuar la key . mejor procesar el value json
          return
 
       elif isinstance(src, pd.DataFrame):

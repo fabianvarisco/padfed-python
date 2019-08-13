@@ -48,7 +48,7 @@ order by key, block desc"""
 # Try using .loc[row_indexer,col_indexer] = value instead
 pd.options.mode.chained_assignment = None
 
-def txs_append(txs: list, org: int, txt: str): txs.append({"org": org, "tx": txt})
+def txs_append(txs: list, org: int, txt: str): txs.append({"block": None, "txseq": None, "personaid": None, "org": org, "kind": txt})
 
 def mk_persona_state( block: int, personaid: int ):
     keypattern = "per:" + str( personaid ) + "#%"
@@ -145,7 +145,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
     return txs
 
 def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFrame) -> list:
-    # print( "processing block {} personaid {} ...".format( block, personaid ) )
+    print( "processing block {} txseq {} ...".format( block, txseq ) )
 
     state = mk_persona_state(block, personaid)
 
@@ -157,20 +157,42 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
     txs = list()
 
     for org in state.get_orgs().union(changes.get_orgs()): 
-        print("personaid {} con datos jurisdiccionales !!!".format( personaid ))
         orgs_txs = txs_by_org(state, changes, org)
         if len(orgs_txs) > 0: txs += orgs_txs
 
     return txs
 
+def process_block(block: int) -> list:
+    print("processing block {} ...".format(block))
+
+    res = db.queryall(QUERY_WSET_BY_BLOCK, {"block" : block})
+
+    if len(res) == 0: 
+       return list({"block": block, "txseq": None, "personaid": None, "org": None, "kind": "non-existing or empty blok"})
+ 
+    txs = list()
+
+    for name, group in Wset(res).groupby_tx_personaid():
+        txseq     = name[0] 
+        personaid = name[1]
+        for tx in process_txpersona(block, txseq, personaid, group):
+            tx["block"] = block
+            tx["txseq"] = txseq
+            tx["personaid"] = personaid
+            txs.append(tx)
+    return txs
+        
+
+"""
 USER = 'HLF'
 PASSW = 'HLF'
 URLDB = 'localhost/xe'
 """
 USER = 'BC_ROSI'
 PASSW = 'BC_ROSI'
-#URLDB='10.30.205.101/padr'
-"""
+URLDB='10.30.205.101/padr'
+
+db: db_access
 
 ###################################################################    
 
@@ -183,24 +205,18 @@ if __name__ == '__main__':
   # sid = os.getenv('PUC_DB_SID', 'padr')
   # url = "%s:%s/%s"%(host, port, sid)
 
-  print( "running ...")
+  print("running ...")
 
   db = db_access(USER, PASSW, URLDB)
 
   block = 53319
   block = 53401
   block = 53410
-  #block = 228802
   #block = 228567
-
-  res = db.queryall( QUERY_WSET_BY_BLOCK, { "block" : block } )
-
-  if len(res) == 0: 
-     print( "block {} does not exists or empty".format( block ) )
-     quit()
-
-  for name, group in Wset(res).groupby_tx_personaid(): 
-      txs = process_txpersona(block, name[0], name[1], group)
-      if len(txs) > 0:
-         print(name)
-         for tx in txs: print(tx)
+  block_start = 228566
+  block_start = 228570
+  block_stop = 228802
+  
+  for block in range(block_start, block_stop+1):
+      for tx in process_block(block): 
+          print(tx)
