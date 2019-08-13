@@ -58,7 +58,7 @@ class Wset():
       idx=self.df.fillna("x").merge(state.get_df().fillna("x"), how='inner', on=['key', 'value', 'isdelete']).index
       if len(idx) == 0: return self
       
-      self.df=self.df[~self.df.index.isin(idx)]
+      self.df=self.df.iloc[~self.df.index.isin(idx)]
       return self
 
   def get_df(self) -> pd.DataFrame: return self.df
