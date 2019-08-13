@@ -152,9 +152,7 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
     # Si el state no tiene datos jurisdiccionales lo vacia
     if not state.has_orgs(): state = Wset() 
 
-    changes = Wset(changes).extend()
-
-    changes.reduce(state)
+    changes = Wset(changes).extend().reduce(state)
 
     txs = list()
 
@@ -166,11 +164,13 @@ def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFr
     return txs
 
 USER = 'HLF'
-USER = 'BC_ROSI'
 PASSW = 'HLF'
-PASSW = 'BC_ROSI'
 URLDB = 'localhost/xe'
-URLDB='10.30.205.101/padr'
+"""
+USER = 'BC_ROSI'
+PASSW = 'BC_ROSI'
+#URLDB='10.30.205.101/padr'
+"""
 
 ###################################################################    
 
@@ -189,8 +189,9 @@ if __name__ == '__main__':
 
   block = 53319
   block = 53401
-  block = 228802
-  block = 228567
+  block = 53410
+  #block = 228802
+  #block = 228567
 
   res = db.queryall( QUERY_WSET_BY_BLOCK, { "block" : block } )
 
@@ -202,4 +203,4 @@ if __name__ == '__main__':
       txs = process_txpersona(block, name[0], name[1], group)
       if len(txs) > 0:
          print(name)
-         print(txs)
+         for tx in txs: print(tx)
