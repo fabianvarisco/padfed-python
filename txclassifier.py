@@ -145,7 +145,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
     return txs
 
 def process_txpersona(block: int, txseq: int, personaid: int, changes: pd.DataFrame) -> list:
-    print( "processing block {} txseq {} ...".format( block, txseq ) )
+    print("processing block {} txseq {} personaid {} ...".format(block, txseq, personaid))
 
     state = mk_persona_state(block, personaid)
 
@@ -167,11 +167,12 @@ def process_block(block: int) -> list:
 
     res = db.queryall(QUERY_WSET_BY_BLOCK, {"block" : block})
 
-    if len(res) == 0: 
-       return list({"block": block, "txseq": None, "personaid": None, "org": None, "kind": "non-existing or empty blok"})
- 
     txs = list()
 
+    if len(res) == 0: 
+       txs.append({"block": block, "txseq": None, "personaid": None, "org": None, "kind": "non-existing or empty blok"})
+       return txs
+ 
     for name, group in Wset(res).groupby_tx_personaid():
         txseq     = name[0] 
         personaid = name[1]
@@ -215,7 +216,9 @@ if __name__ == '__main__':
   #block = 228567
   block_start = 228566
   block_start = 228570
-  block_stop = 228802
+  block_start = 228802
+  block_stop = 229094
+  block_start = block_stop = 229086
   
   for block in range(block_start, block_stop+1):
       for tx in process_block(block): 
