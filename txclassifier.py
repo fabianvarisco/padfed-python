@@ -232,7 +232,10 @@ def config_target_orgs(config, section: str, option: str) -> set:
           target_orgs = {target_orgs} # single
        except:
           # All orgs
-          return DEF_ORGANIZACIONES.keys()
+          target_orgs = DEF_ORGANIZACIONES.keys()
+
+    if len(target_orgs) == 0:
+       raise ValueError("Config: section [{}] option [{}] invalid (target_orgs empty !!!)".format(section, option))
 
     for o in target_orgs:
         if o < COMARB:
