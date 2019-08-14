@@ -37,7 +37,6 @@ def get_org_by_provincia(provincia: int) -> dict:
            if p > -1: dict_provincia_org[p] = key    
     return dict_provincia_org.get(provincia, -1)
 
-# TODO: Agregar los impuestos de monotributo provincial    
 DEF_IMPUESTOS = {        
   5900: 900, 
   5901: 901, 
@@ -64,4 +63,13 @@ DEF_IMPUESTOS = {
   5922: 922,  
   5923: 923,  
   5924: 924, 
+# Fuera del rango 5900
+  5243:	904, # IIBB CORDOBA
+  5244:	904, # CONTRIB MUNI CORDOBA
+  5445:	913, # IIBB MENDOZA
+  5446:	913, # CONTRIB MUNI MENDOZA
+  5556:	918, # IIBB SAN JUAN
+  5557:	918, # CONTRIB MUNI SAN JUAN
+  5578:	910, # IIBB JUJUY
+  5579:	910, # CONTRIB MUNI JUJUY
 }
