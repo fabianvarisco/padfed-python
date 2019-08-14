@@ -54,9 +54,9 @@ class Wset():
       def resolve_obj(row) -> dict:
           if row.value is None and row.isdelete == "T":
              # Getting obj from state by key
-             if self.state is None or self.state.is_empty(): return None
+             if self.state is None or self.state.is_empty(): return {}
              state_obj = self.state.get_df().loc[row.key, "obj"]
-             return None if len(state_obj) == 0 else state_obj.get("obj", None)
+             return {} if len(state_obj) == 0 else state_obj.get("obj", {})
           
           if isinstance(row.value, str) and len(row.value) > 0: 
              obj = json.loads(row.value)
@@ -65,7 +65,7 @@ class Wset():
                 obj["org"] = org # Add org to impuesto or contribmuni
              return obj     
 
-          return None
+          return {}
 
       if not self.df.empty:
          self.df["obj"] = self.df.apply(lambda row: resolve_obj(row), axis=1)
@@ -93,12 +93,13 @@ class Wset():
       except:
         return 0
 
+  # TODO: jntar con resolve_org para resolver en una unica barrida
   def scan_row(self, component_type: str, obj: dict):
 
       if obj is None: return
     
       if component_type == 'cms': 
-         # TODO: refisar si hay que recuperar org desde provincia
+         # TODO: revisar si hay que recuperar org desde provincia
          self.add_target_org(COMARB)
       
       elif component_type in ['imp', 'con']: 
@@ -113,7 +114,7 @@ class Wset():
               self.add_target_org(org)
 
            if component_type == 'jur':
-              # recupera el oerg de la provincia
+              # recupera el org de la provincia
               org = get_org_by_provincia(obj.get("provincia", -1))
               if org > 1: self.add_target_org(org)
       
@@ -124,6 +125,8 @@ class Wset():
           if not o is None and o.get("org", -1) == org: return o
       return dict()
   
+  # TODO: funcion para obtener una lista con los disintos type del wset
+  #     
   def get_persona(self) -> list:        return self.get_objs("per")
   def get_jurisdicciones(self) -> list: return self.get_objs("jur")
   def get_actividades(self) -> list:    return self.get_objs("act")
