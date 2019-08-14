@@ -41,6 +41,7 @@ QUERY_WSET_BY_BLOCK = """
 select * 
 from hlf.bc_valid_tx_write_set 
 where block = :block
+and key||'' /* avoid index by key */ like 'per:%'
 order by txseq, item"""
 
 QUERY_WSET_BY_KEYPATTERN = """
@@ -271,8 +272,7 @@ if __name__ == '__main__':
   config = configparser.ConfigParser()
   config.read(config_file_name)
   
-  ll = config["behaviour"].get("logging_level", "INFO")
-  config_logging(ll)
+  config_logging(config["behaviour"].get("logging_level", "INFO"))
 
   user            = config["db"]["user"]
   password        = config["db"]["password"]
