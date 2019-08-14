@@ -174,7 +174,7 @@ def process_txpersona(block: int, target_orgs: set, txseq: int, personaid: int, 
     # Si el state no tiene datos jurisdiccionales lo vacia
     if not state.has_orgs(): state = Wset() 
 
-    changes = Wset(changes).extend().reduce(state)
+    changes = Wset(changes).extend(state).reduce(state)
 
     txs = list()
 

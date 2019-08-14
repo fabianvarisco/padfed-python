@@ -43,8 +43,6 @@ class Wset():
          self.df = self.df[self.df["isdelete"] != "T"]
       return self
 
-
-
   # Add obj column (json.loads(value)) 
   def extend(self, state = None):
  
@@ -52,8 +50,8 @@ class Wset():
           if row.value is None and row.isdelete == "T":
              # Getting obj from state by key
              if self.state is None or self.state.is_empty(): return None
-             state_obj = self.state.loc[getattr(self.df, "key") == row.name, "obj"]
-             return None if len(state_obj) == 0 else state_obj[0]["obj"]
+             state_obj = self.state.get_df().loc[row.key, "obj"]
+             return None if len(state_obj) == 0 else state_obj.get("obj", None)
           
           if isinstance(row.value, str) and len(row.value) > 0: return json.loads(row.value)
 
