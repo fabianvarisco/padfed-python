@@ -104,7 +104,7 @@ def txs_by_persona(state_persona, changes_persona):
     # TODO: buscar cambios en razon social, nombre, apellido, estadoid
     return 
 
-def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
+def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
     txs = list()
 
     state_impuesto   = state.get_impuesto_by_org(org)
@@ -115,50 +115,53 @@ def txs_by_org(state: Wset, changes: Wset, org: int) -> list:
        # MIGRACION o INSCRIPCION
        if len(state_impuesto) == 0: # No estaba inscripto
           txt = "MIGRACON" if changes.from_migration(org) else "INSCRIPCION"
-          txs_append(txs, org, txt)
+          if org in target_orgs: txs_append(txs, org, txt)
           if org == COMARB:
              txt += " DESDE CM"
              for j in changes.get_jurisdicciones():
                  o = get_org_by_provincia(j.get("provincia", -1))
-                 if o > -1: txs_append(txs, o, txt)
+                 if o in target_orgs: txs_append(txs, o, txt)
           return txs
 
        # REINSCRIPCION
        if len(state_impuesto) > 0 and state_impuesto.get("estado", "") != "AC":
           txt = "REINSCRIPCION"
-          txs_append(txs, org, txt)
+          if org in target_orgs: txs_append(txs, org, txt)
           if org == COMARB:
              txt += " DESDE CM"
              for j in changes.get_jurisdicciones(): 
                  if j.get("estado", "") == "AC":
                     o = get_org_by_provincia(j.get("provincia", -1))
-                    if o > -1: txs_append(txs, j.get("org"), txt)
+                    if o in target_orgs: txs_append(txs, o, txt)
           return txs
     
        if org == COMARB:
           # CAMBIO DE JURISDICCION CM
           rows = changes.get_jurisdicciones()
           if len(rows) > 0:
-             txs_append(txs, COMARB, "CAMBIO JURISDICCION CM")
+             if org in target_orgs: txs_append(txs, org, "CAMBIO JURISDICCION CM")
              for j in rows:
-                 txs_append(txs, j.get("org"), "CAMBIO JURISDICCION CM")
+                 o = get_org_by_provincia(j.get("provincia", -1))
+                 if o in target_orgs: txs_append(txs, o, "CAMBIO JURISDICCION CM")
  
           # CAMBIO DE SEDE CM
           rows = changes.get_cmsedes()
           if len(rows) > 0:
-             txs_append(txs, COMARB, "CAMBIO DE SEDE CM")
+             if org in target_orgs: txs_append(txs, org, "CAMBIO DE SEDE CM")
              for s in rows:
-                 s_org = get_org_by_provincia(s.get("provincia"))
-                 if s_org != -1: txs_append(txs, s_org, "CAMBIO DE SEDE CM")
+                 o = get_org_by_provincia(s.get("provincia", -1))
+                 if o in target_orgs: txs_append(txs, o, "CAMBIO DE SEDE CM")
+
+    if not org in target_orgs: return txs
 
     txs_by_persona(  txs, changes.get_persona())
     txs_by_component(txs, org, "IMPUESTO",  changes.get_impuestos(), extrict=True)
     txs_by_component(txs, org, "ACTIVIDAD", changes.get_actividades())
-    txs_by_component(txs, org, "DOMICILIO", changes.get_domicilios()) # TODO: Verificar si el dom tiene rol jurisdiccional
+    txs_by_component(txs, org, "DOMICILIO", changes.get_domicilios()) 
     txs_by_component(txs, org, "RELACION",  changes.get_relaciones())
     txs_by_component(txs, org, "EMAIL",     changes.get_emails())
     txs_by_component(txs, org, "TELEFONO",  changes.get_relaciones()) 
-    txs_by_component(txs, org, "DOMIROL",   changes.get_domiroles()) 
+    txs_by_component(txs, org, "DOMIROL",   changes.get_domisroles()) 
 
     # TODO: Detectar cambio de socio !!!!!!!!
     return txs
@@ -177,10 +180,13 @@ def process_txpersona(block: int, target_orgs: set, txseq: int, personaid: int, 
 
     orgs = state.get_orgs().union(changes.get_orgs())
 
-    if len(target_orgs) > 0: orgs = orgs.intersection(target_orgs)
+    if len(target_orgs) > 0: 
+       orgs = orgs.intersection(target_orgs)
+       if not COMARB in orgs:
+          orgs.add(COMARB) 
 
     for org in orgs: 
-        orgs_txs = txs_by_org(state, changes, org)
+        orgs_txs = txs_by_org(state, changes, org, target_orgs)
         if len(orgs_txs) > 0: txs += orgs_txs
 
     return txs
@@ -238,7 +244,7 @@ def save_config(filename: str, config, block: int):
 
 def config_logging(level: str):
     handler = logging.StreamHandler()
-    formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
+    formatter = logging.Formatter("%(asctime)s %(levelname)-5s %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG if level.lower() == "debug" else logging.INFO)

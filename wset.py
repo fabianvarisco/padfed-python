@@ -43,10 +43,26 @@ class Wset():
          self.df = self.df[self.df["isdelete"] != "T"]
       return self
 
+
+
   # Add obj column (json.loads(value)) 
-  def extend(self):
+  def extend(self, state = None):
+ 
+      def resolve_obj(row) -> dict:
+          if row.value is None and row.isdelete == "T":
+             # Getting obj from state by key
+             if self.state is None or self.state.is_empty(): return None
+             state_obj = self.state.loc[getattr(self.df, "key") == row.name, "obj"]
+             return None if len(state_obj) == 0 else state_obj[0]["obj"]
+          
+          if isinstance(row.value, str) and len(row.value) > 0: return json.loads(row.value)
+
+          return None
+
       if not self.df.empty:
-         self.df["obj"] = self.df.apply(lambda row: None if row.value is None or not isinstance(row.value, str) else json.loads(row.value), axis=1)
+         self.state = state
+         self.df["obj"] = self.df.apply(lambda row: resolve_obj(row), axis=1)
+         self.state = None
          for row in self.df.itertuples(): 
              self.scan_row(row.component_type, row.obj)
       return self
@@ -96,15 +112,12 @@ class Wset():
               if org > 1: self.add_target_org(org)
       
   def get_impuesto_by_org(self, org: int) -> dict:
+      # obj puede estar vacio si fue un delete 
+      # y el obj no se pudo recuperar desde el state
       for o in self.get_impuestos(): 
-          if o.get("org") == org: return o
+          if not o is None and o.get("org", -1) == org: return o
       return dict()
   
-  def has_domicilios(self, org: int = -1) -> bool:
-      for o in self.get_domicilios(): 
-          if o.get("org") > 1 and (o.obj("org") == org or org == -1): return True
-      return False
-
   def get_persona(self) -> list:        return self.get_objs("per")
   def get_jurisdicciones(self) -> list: return self.get_objs("jur")
   def get_actividades(self) -> list:    return self.get_objs("act")
@@ -116,7 +129,7 @@ class Wset():
   def get_domicilios(self) -> list:     return self.get_objs("dom")
   def get_impuestos(self) -> list:      return self.get_objs("imp")
   def get_persona(self) -> list:        return self.get_objs("per")
-  def get_domiroles(self) -> list:      return self.get_objs("dor")
+  def get_domisroles(self) -> list:     return self.get_objs("dor")
 
   def get_objs(self, component_type: str) -> list:
       if self.is_empty(): return list()
