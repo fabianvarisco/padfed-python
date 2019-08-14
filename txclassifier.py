@@ -164,6 +164,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
     txs_by_component(txs, org, "EMAIL",     changes.get_emails())
     txs_by_component(txs, org, "TELEFONO",  changes.get_relaciones()) 
     txs_by_component(txs, org, "DOMIROL",   changes.get_domisroles()) 
+    txs_by_component(txs, org, "ETIQUETA",  changes.get_etiquetas()) 
 
     # TODO: Detectar cambio de socio !!!!!!!!
     return txs

@@ -47,30 +47,50 @@ class Wset():
          self.df = self.df[self.df["isdelete"] != "T"]
       return self
 
-  # Add obj column (json.loads(value)) 
-  # and scan orgs
+  # Add obj column (json.loads(value)) and gather orgs
   def extend(self):
- 
-      def resolve_obj(row) -> dict:
-          if row.value is None and row.isdelete == "T":
-             # Getting obj from state by key
-             if self.state is None or self.state.is_empty(): return {}
-             state_obj = self.state.get_df().loc[row.key, "obj"]
-             return {} if len(state_obj) == 0 else state_obj.get("obj", {})
-          
-          if isinstance(row.value, str) and len(row.value) > 0: 
-             obj = json.loads(row.value)
-             if row.component_type in ['imp', 'con']: 
-                org = DEF_IMPUESTOS.get(obj.get("impuesto", -1), 1)
-                obj["org"] = org # Add org to impuesto or contribmuni
-             return obj     
 
-          return {}
+      def gather_orgs(component_type: str, obj: dict):
+          if component_type in ['imp', 'con']:
+             # en estos objetos siempre viene el org real
+             # que fue seteado en resolver_obj 
+             org = obj.get("org", -1)
+             if org > 1: self.add_target_org(org)
+    
+          elif component_type in ['jur', 'act', 'dom', 'dor', 'cms']: 
+               org = obj.get("org", -1)
+               if org > 1: 
+                  # si tienen org > 1, entonces fueron migrados 
+                  self.add_migration_org(org) 
+                  self.add_target_org(org)
+      
+               if component_type in ['jur', 'cms']:
+                  # recupera el org desde la provincia
+                  org = get_org_by_provincia(obj.get("provincia", -1))
+                  if org > 1: self.add_target_org(org)       
+ 
+      def resolve_obj(row):
+          obj = {}
+          if row.isdelete == "T":
+             # Getting obj from state by key
+             if  not self.state is None \
+             and not self.state.is_empty():
+                 state_obj = self.state.get_df().loc[row.key, "obj"]
+                 if len(state_obj) > 0: 
+                    obj = state_obj.get("obj", {})
+          
+          elif isinstance(row.value, str) and len(row.value) > 0: 
+               obj = json.loads(row.value)
+               if row.component_type in ['imp', 'con']: 
+                  org = DEF_IMPUESTOS.get(obj.get("impuesto", -1), 1)
+                  obj["org"] = org # Add org into impuesto and contribmuni
+          
+          gather_orgs(row.component_type, obj)
+
+          return obj
 
       if not self.df.empty:
          self.df["obj"] = self.df.apply(lambda row: resolve_obj(row), axis=1)
-         for row in self.df.itertuples(): 
-             self.scan_row(row.component_type, row.obj)
       return self
 
   # Delete dummies changes(state == change)
@@ -92,31 +112,6 @@ class Wset():
         return self.df["isdelete"].count() > 0
       except:
         return 0
-
-  # TODO: jntar con resolve_org para resolver en una unica barrida
-  def scan_row(self, component_type: str, obj: dict):
-
-      if obj is None: return
-    
-      if component_type == 'cms': 
-         # TODO: revisar si hay que recuperar org desde provincia
-         self.add_target_org(COMARB)
-      
-      elif component_type in ['imp', 'con']: 
-           org = obj.get("org", -1)
-           if org > 1: self.add_target_org(org)
-      
-      elif component_type in ['jur', 'act', 'dom', 'dor']: 
-           org = obj.get("org", -1)
-           if org > 1: 
-              # si tienen org > 1, entonces fueron migrados 
-              self.add_migration_org(org) 
-              self.add_target_org(org)
-
-           if component_type == 'jur':
-              # recupera el org de la provincia
-              org = get_org_by_provincia(obj.get("provincia", -1))
-              if org > 1: self.add_target_org(org)
       
   def get_impuesto_by_org(self, org: int) -> dict:
       # obj puede estar vacio si fue un delete 
@@ -139,6 +134,7 @@ class Wset():
   def get_impuestos(self) -> list:      return self.get_objs("imp")
   def get_persona(self) -> list:        return self.get_objs("per")
   def get_domisroles(self) -> list:     return self.get_objs("dor")
+  def get_etiquetas(self) -> list:      return self.get_objs("eti")
 
   def get_objs(self, component_type: str) -> list:
       if self.is_empty(): return list()
