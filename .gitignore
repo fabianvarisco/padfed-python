@@ -2,3 +2,5 @@
 __pycache__/
 *.txt
 .vscode/*
+*.output
+*.log

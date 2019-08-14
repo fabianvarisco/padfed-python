@@ -279,7 +279,7 @@ if __name__ == '__main__':
    
      print_output("{} - {} running - output_file {} ...".format(timestr, script_name, output_file_name), f)
      
-     config_file_name = "{}.ini".format(script_name.split(".")[0])
+     config_file_name = "{}.conf".format(script_name.split(".")[0])
      print_output("reading config from {} ...".format(config_file_name), f)
      config = configparser.ConfigParser()
      config.read(config_file_name)
@@ -293,6 +293,13 @@ if __name__ == '__main__':
      block_stop      = config_getint(config, "filters", "block_stop")
      block_processed = config_getint(config, "filters", "block_processed")
      target_orgs     = config_target_orgs(config, "behaviour", "target_orgs")
+
+     print_output("db.url: {}".format(user), f)
+     print_output("db.user: {}".format(url), f)
+     print_output("filters.block_start: {}".format(block_start), f)
+     print_output("filters.block_stop: {}".format(block_stop), f)
+     print_output("filters.block_processed: {}".format(block_processed), f)
+     print_output("filters.target_orgs: {}".format(target_orgs), f)
    
      if  block_processed > -1:
          if block_processed < block_start: 
@@ -321,17 +328,17 @@ if __name__ == '__main__':
      i = 0
      logger.info("processing from block {} to {} ...".format(block_start, block_stop))
      for block in range(block_start, block_stop+1):
-         for tx in process_block(block, target_orgs): 
-            print(tx)
-            print(tx, file=f)
+         for tx in process_block(block, target_orgs): print_output(tx, f)
          block_processed = block
          i += 1
          if i % 100 == 0: save_config(config_file_name, config, block_processed)
    
      save_config(config_file_name, config, block_processed)
 
+     timestr = time.strftime("%Y%m%d-%H%M%S")
+     print_output("{} - {} success end".format(timestr, script_name), f)
   finally:
      if not f is None: 
         timestr = time.strftime("%Y%m%d-%H%M%S")
-        print_output("{} - {} end".format(timestr, script_name), f)
+        print_output("{} - {} stop".format(timestr, script_name), f)
         f.close()
