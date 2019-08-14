@@ -34,6 +34,10 @@ class Wset():
 
       raise ValueError("Unexpected src type [{}] must by list or pd.DataFrame".format(type(src)))
 
+  def set_state(self, state):
+      self.state = state
+      return self
+
   def groupby_tx_personaid(self):
       return self.df.groupby(['txseq', 'personaid'])
 
@@ -44,7 +48,8 @@ class Wset():
       return self
 
   # Add obj column (json.loads(value)) 
-  def extend(self, state = None):
+  # and scan orgs
+  def extend(self):
  
       def resolve_obj(row) -> dict:
           if row.value is None and row.isdelete == "T":
@@ -53,23 +58,26 @@ class Wset():
              state_obj = self.state.get_df().loc[row.key, "obj"]
              return None if len(state_obj) == 0 else state_obj.get("obj", None)
           
-          if isinstance(row.value, str) and len(row.value) > 0: return json.loads(row.value)
+          if isinstance(row.value, str) and len(row.value) > 0: 
+             obj = json.loads(row.value)
+             if row.component_type in ['imp', 'con']: 
+                org = DEF_IMPUESTOS.get(obj.get("impuesto", -1), 1)
+                obj["org"] = org # Add org to impuesto or contribmuni
+             return obj     
 
           return None
 
       if not self.df.empty:
-         self.state = state
          self.df["obj"] = self.df.apply(lambda row: resolve_obj(row), axis=1)
-         self.state = None
          for row in self.df.itertuples(): 
              self.scan_row(row.component_type, row.obj)
       return self
 
   # Delete dummies changes(state == change)
-  def reduce(self, state):
-      if self.df.empty or state.is_empty(): return self
+  def reduce(self):
+      if self.df.empty or self.state is None or self.state.is_empty(): return self
       
-      idx=self.df.fillna("x").merge(state.get_df().fillna("x"), how='inner', on=['key', 'value', 'isdelete']).index
+      idx=self.df.fillna("x").merge(self.state.get_df().fillna("x"), how='inner', on=['key', 'value', 'isdelete']).index
       if len(idx) == 0: return self
       
       self.df=self.df.iloc[~self.df.index.isin(idx)]
@@ -90,22 +98,22 @@ class Wset():
       if obj is None: return
     
       if component_type == 'cms': 
+         # TODO: refisar si hay que recuperar org desde provincia
          self.add_target_org(COMARB)
       
       elif component_type in ['imp', 'con']: 
-           org = DEF_IMPUESTOS.get(obj.get("impuesto", -1), 1)
-           obj["org"] = org # Add org to impuesto or contribmuni
+           org = obj.get("org", -1)
            if org > 1: self.add_target_org(org)
       
       elif component_type in ['jur', 'act', 'dom', 'dor']: 
            org = obj.get("org", -1)
            if org > 1: 
-              # si estas tablas tienen org > 1, entonces sus datos fueron migrados 
+              # si tienen org > 1, entonces fueron migrados 
               self.add_migration_org(org) 
               self.add_target_org(org)
 
-           if org == COMARB and component_type == 'jur':
-              # si la org es COMARB, entonces la provincia corresponde a otra org
+           if component_type == 'jur':
+              # recupera el oerg de la provincia
               org = get_org_by_provincia(obj.get("provincia", -1))
               if org > 1: self.add_target_org(org)
       

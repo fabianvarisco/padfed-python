@@ -1,8 +1,6 @@
 COMARB = 900
 
 DEF_ORGANIZACIONES = {
-  1:   { "org":1,   "name":"AFIP",                      "cuit":33693450239, "provincia": -1 }, 
-  100: { "org":100, "name":"MULTI ORGANISMOS",          "cuit":-1,          "provincia": -1 },          
   900: { "org":900, "name":"COMISION ARBITRAL",         "cuit":30658892718, "provincia": -1 },  
   901: { "org":901, "name":"IP - CABA",                 "cuit":34999032089, "provincia":  0 },
   902: { "org":902, "name":"BA - BUENOS AIRES",         "cuit":30710404611, "provincia":  1 },
@@ -39,7 +37,7 @@ def get_org_by_provincia(provincia: int) -> dict:
            if p > -1: dict_provincia_org[p] = key    
     return dict_provincia_org.get(provincia, -1)
 
-# TODO: Falta agregar los impuestos de monotributo provincial    
+# TODO: Agregar los impuestos de monotributo provincial    
 DEF_IMPUESTOS = {        
   5900: 900, 
   5901: 901, 

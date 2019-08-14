@@ -156,6 +156,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
 
     txs_by_persona(  txs, changes.get_persona())
     txs_by_component(txs, org, "IMPUESTO",  changes.get_impuestos(), extrict=True)
+    txs_by_component(txs, org, "CONTRIBMUNI", changes.get_contribmunis(), extrict=True)
     txs_by_component(txs, org, "ACTIVIDAD", changes.get_actividades())
     txs_by_component(txs, org, "DOMICILIO", changes.get_domicilios()) 
     txs_by_component(txs, org, "RELACION",  changes.get_relaciones())
@@ -174,16 +175,19 @@ def process_txpersona(block: int, target_orgs: set, txseq: int, personaid: int, 
     # Si el state no tiene datos jurisdiccionales lo vacia
     if not state.has_orgs(): state = Wset() 
 
-    changes = Wset(changes).extend(state).reduce(state)
+    changes = Wset(changes).set_state(state).extend().reduce()
 
     txs = list()
 
-    orgs = state.get_orgs().union(changes.get_orgs())
+    union_orgs = state.get_orgs().union(changes.get_orgs())
 
-    if len(target_orgs) > 0: 
-       orgs = orgs.intersection(target_orgs)
-       if not COMARB in orgs:
-          orgs.add(COMARB) 
+    orgs = union_orgs.intersection(target_orgs)
+
+    if len(orgs) == 0: return txs
+
+    if  COMARB not in target_orgs \
+    and COMARB in union_orgs:
+        orgs.add(COMARB) 
 
     for org in orgs: 
         orgs_txs = txs_by_org(state, changes, org, target_orgs)
@@ -227,7 +231,8 @@ def config_target_orgs(config, section: str, option: str) -> set:
        try:
           target_orgs = {target_orgs} # single
        except:
-          return {} # empty set
+          # All orgs
+          return DEF_ORGANIZACIONES.keys()
 
     for o in target_orgs:
         if o < COMARB:
