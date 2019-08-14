@@ -4,6 +4,7 @@ import sys
 import os    
 import configparser
 import logging
+import time
   
 import cx_Oracle
 import pandas as pd
@@ -47,7 +48,7 @@ order by txseq, item"""
 QUERY_WSET_BY_KEYPATTERN = """
 select *
 from hlf.bc_valid_tx_write_set
-where block < :block
+where block+0 < :block
 and key like :keypattern
 order by key, block desc"""
 
@@ -252,12 +253,13 @@ def save_config(filename: str, config, block: int):
     config["filters"]["block_processed"] = str(block)
     with open(filename, 'w') as f: config.write(f) 
 
-def config_logging(level: str):
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter("%(asctime)s %(levelname)-5s %(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG if level.lower() == "debug" else logging.INFO)
+def config_logging(filename: str, level: str):
+    level = logging.DEBUG if level.lower() == "debug" else logging.INFO
+    logging.basicConfig(filename=filename, filemode='w', level=level, format='%(asctime)s %(levelname)-5s %(message)s')
+
+def print_output(message: str, file = None):
+    print(message)
+    if not file is None: print(message, file=f, flush=True)
 
 db: db_access
 
@@ -265,54 +267,71 @@ db: db_access
 
 if __name__ == '__main__':
 
-  script_name = os.path.basename(sys.argv[0])
-  print("{} running ...".format(script_name))
-
-  config_file_name = "{}.ini".format(script_name.split(".")[0])
-  print("reading config from {} ...".format(config_file_name))
-  config = configparser.ConfigParser()
-  config.read(config_file_name)
-  
-  config_logging(config["behaviour"].get("logging_level", "INFO"))
-
-  user            = config["db"]["user"]
-  password        = config["db"]["password"]
-  url             = config["db"]["url"]
-  block_start     = config_getint(config, "filters", "block_start")
-  block_stop      = config_getint(config, "filters", "block_stop")
-  block_processed = config_getint(config, "filters", "block_processed")
-  target_orgs     = config_target_orgs(config, "behaviour", "target_orgs")
-
-  if  block_processed > -1:
-      if block_processed < block_start: 
-         raise ValueError("Config: section [{}] block_processed {} must be greater than or equal to block_start {}".format("filters", block_processed, block_start))
-
-  if  block_stop > -1 and block_stop < block_start: 
-      raise ValueError("Config: section [{}] block_stop {} must be greater than or equal to block_start {}".format("filters", block_stop, block_start))
-
-  if  block_processed > -1 \
-  and block_stop > -1 \
-  and block_stop < block_processed: 
-      raise ValueError("Config: section [{}] block_stop {} must be greater than or equal to block_processed {}".format("filters", block_stop, block_processed))
-
-  db = db_access(user, password, url)
-
-  if block_stop == -1: 
-     max_block = select_max_block()
-     if block_processed > max_block:
-        raise ValueError("Config: section [{}] block_processed {} must be less than db max_block {}".format("filters", block_processed, max_block))
-     if block_processed == -1 and block_start > max_block:
-        raise ValueError("Config: section [{}] block_start {} must be less than max_block {}".format("filters", block_start, max_block))
-     block_stop = max_block
-
-  if block_processed > -1: block_start = block_processed
+  try: 
+     script_name = os.path.basename(sys.argv[0])
    
-  i = 0
-  logger.info("processing from block {} to {} ...".format(block_start, block_stop))
-  for block in range(block_start, block_stop+1):
-      for tx in process_block(block, target_orgs): print(tx)
-      block_processed = block
-      i += 1
-      if i % 100 == 0: save_config(config_file_name, config, block_processed)
+     timestr = time.strftime("%Y%m%d-%H%M%S")
+   
+     output_file_name = "{}.{}.output".format(script_name.split(".")[0], timestr)
+     log_file_name    = "{}.{}.log".format(script_name.split(".")[0], timestr)
+   
+     f = open(output_file_name,"w+")
+   
+     print_output("{} - {} running - output_file {} ...".format(timestr, script_name, output_file_name), f)
+     
+     config_file_name = "{}.ini".format(script_name.split(".")[0])
+     print_output("reading config from {} ...".format(config_file_name), f)
+     config = configparser.ConfigParser()
+     config.read(config_file_name)
+     
+     config_logging(log_file_name, config["behaviour"].get("logging_level", "INFO"))
+   
+     user            = config["db"]["user"]
+     password        = config["db"]["password"]
+     url             = config["db"]["url"]
+     block_start     = config_getint(config, "filters", "block_start")
+     block_stop      = config_getint(config, "filters", "block_stop")
+     block_processed = config_getint(config, "filters", "block_processed")
+     target_orgs     = config_target_orgs(config, "behaviour", "target_orgs")
+   
+     if  block_processed > -1:
+         if block_processed < block_start: 
+            raise ValueError("Config: section [{}] block_processed {} must be greater than or equal to block_start {}".format("filters", block_processed, block_start))
+   
+     if  block_stop > -1 and block_stop < block_start: 
+         raise ValueError("Config: section [{}] block_stop {} must be greater than or equal to block_start {}".format("filters", block_stop, block_start))
+   
+     if  block_processed > -1 \
+     and block_stop > -1 \
+     and block_stop < block_processed: 
+         raise ValueError("Config: section [{}] block_stop {} must be greater than or equal to block_processed {}".format("filters", block_stop, block_processed))
+   
+     db = db_access(user, password, url)
+   
+     if block_stop == -1: 
+        max_block = select_max_block()
+        if block_processed > max_block:
+           raise ValueError("Config: section [{}] block_processed {} must be less than db max_block {}".format("filters", block_processed, max_block))
+        if block_processed == -1 and block_start > max_block:
+           raise ValueError("Config: section [{}] block_start {} must be less than max_block {}".format("filters", block_start, max_block))
+        block_stop = max_block
+   
+     if block_processed > -1: block_start = block_processed
+      
+     i = 0
+     logger.info("processing from block {} to {} ...".format(block_start, block_stop))
+     for block in range(block_start, block_stop+1):
+         for tx in process_block(block, target_orgs): 
+            print(tx)
+            print(tx, file=f)
+         block_processed = block
+         i += 1
+         if i % 100 == 0: save_config(config_file_name, config, block_processed)
+   
+     save_config(config_file_name, config, block_processed)
 
-  save_config(config_file_name, config, block_processed)
+  finally:
+     if not f is None: 
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        print_output("{} - {} end".format(timestr, script_name), f)
+        f.close()
