@@ -72,53 +72,63 @@ def txs_append(txs: list, org: int, txt: str):
     txs.append({"block": None, "txseq": None, "personaid": None, "org": org, "kind": txt})
 
 def mk_persona_state( block: int, personaid: int ):
-    keypattern = "per:" + str( personaid ) + "#%"
+    keypattern = "per:" + str(personaid) + "#%"
     res = db.queryall(QUERY_WSET_BY_KEYPATTERN, {"block" : block, "keypattern" : keypattern})
     return Wset(res).resolve_state().extend()  
 
 def inscripcion_alta(state_impuesto: dict, changes_impuesto: dict) -> bool:
 
-    if  state_impuesto.get("estado", "") == "AC" \
+    if  state_impuesto is not None \
+    and state_impuesto.get("estado", "") == "AC" \
     and len(changes_impuesto) == 0: 
         return True
 
-    if  changes_impuesto.get("estado", "") == "AC" \
+    if  changes_impuesto is not None \
+    and changes_impuesto.get("estado", "") == "AC" \
     and changes_impuesto.get("isdelete", "") != "T":
         return True
     
     return False   
 
-def txs_by_component(txs: list, org: int, name: str, components: list, extrict: bool = False):
-    if len(components) == 0: return
-    
-    if not extrict:
-       txs_append(txs, org, "CAMBIO EN {}".format(name))
-       return
-      
-    # Extrict Mode
-    for c in components:
-        if c.get("org", -1) == org: 
-           txs_append(txs, org, "CAMBIO EN {}".format(name))
-           return
+def txs_by_component(txs: list, changes: Wset, component_type: str, org: int):
+    components = changes.get_objs(component_type)
+    if len(components) > 0:
 
-def txs_by_persona(state_persona, changes_persona):
-    if len(state_persona) == 0 or len(changes_persona) == 0: return
-    # TODO: buscar cambios en razon social, nombre, apellido, estadoid
-    return 
+       if component_type == "wit":
+          txs_append(txs, org, "NUEVA PERSONA")
+          return
+
+       name = COMPONENT_NAME_BY_TYPE.get(component_type, None)
+
+       if name is None:
+          raise ValueError("component_type {} unknow".format(component_type))
+    
+       if org is None:
+          txs_append(txs, org, "CAMBIO EN {}".format(name))
+          return
+      
+       # Extrict Mode
+       for c in components:
+           if c.get("org", -1) == org: 
+              txs_append(txs, org, "CAMBIO EN {}".format(name)) 
 
 def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
     txs = list()
 
-    state_impuesto   = state.get_impuesto_by_org(org)
-    changes_impuesto = changes.get_impuesto_by_org(org)
+    state_components = state.get_components_unique()
+    changes_components = changes.get_components_unique()
 
-    if inscripcion_alta(state_impuesto, changes_impuesto):
+    state_impuesto   = None if not "imp" in state_components   else state.get_impuesto_by_org(org)
+    changes_impuesto = None if not "imp" in changes_components else changes.get_impuesto_by_org(org)
+
+    if (state_impuesto is not None or changes_impuesto is not None) \
+    and inscripcion_alta(state_impuesto, changes_impuesto):
 
        # MIGRACION o INSCRIPCION
-       if len(state_impuesto) == 0: # No estaba inscripto
+       if state_impuesto is None or len(state_impuesto) == 0: # No estaba inscripto
           txt = "MIGRACON" if changes.from_migration(org) else "INSCRIPCION"
           if org in target_orgs: txs_append(txs, org, txt)
-          if org == COMARB:
+          if org == COMARB and "jur" in changes_components:
              txt += " DESDE CM"
              for j in changes.get_jurisdicciones():
                  o = get_org_by_provincia(j.get("provincia", -1))
@@ -126,10 +136,12 @@ def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
           return txs
 
        # REINSCRIPCION
-       if len(state_impuesto) > 0 and state_impuesto.get("estado", "") != "AC":
+       if state_impuesto is not None \
+       and len(state_impuesto) > 0 \
+       and state_impuesto.get("estado", "") != "AC":
           txt = "REINSCRIPCION"
           if org in target_orgs: txs_append(txs, org, txt)
-          if org == COMARB:
+          if org == COMARB and "jur" in changes_components:
              txt += " DESDE CM"
              for j in changes.get_jurisdicciones(): 
                  if j.get("estado", "") == "AC":
@@ -137,7 +149,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
                     if o in target_orgs: txs_append(txs, o, txt)
           return txs
     
-       if org == COMARB:
+       if org == COMARB and "jur" in changes_components:
           # CAMBIO DE JURISDICCION CM
           rows = changes.get_jurisdicciones()
           if len(rows) > 0:
@@ -147,25 +159,19 @@ def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
                  if o in target_orgs: txs_append(txs, o, "CAMBIO JURISDICCION CM")
  
           # CAMBIO DE SEDE CM
-          rows = changes.get_cmsedes()
-          if len(rows) > 0:
-             if org in target_orgs: txs_append(txs, org, "CAMBIO DE SEDE CM")
-             for s in rows:
-                 o = get_org_by_provincia(s.get("provincia", -1))
-                 if o in target_orgs: txs_append(txs, o, "CAMBIO DE SEDE CM")
+          if "cms" in changes_components:
+             rows = changes.get_cmsedes()
+             if len(rows) > 0:
+                if org in target_orgs: txs_append(txs, org, "CAMBIO DE SEDE CM")
+                for s in rows:
+                    o = get_org_by_provincia(s.get("provincia", -1))
+                    if o in target_orgs: txs_append(txs, o, "CAMBIO DE SEDE CM")
 
     if not org in target_orgs: return txs
 
-    txs_by_persona(  txs, changes.get_persona())
-    txs_by_component(txs, org, "IMPUESTO",  changes.get_impuestos(), extrict=True)
-    txs_by_component(txs, org, "CONTRIBMUNI", changes.get_contribmunis(), extrict=True)
-    txs_by_component(txs, org, "ACTIVIDAD", changes.get_actividades())
-    txs_by_component(txs, org, "DOMICILIO", changes.get_domicilios()) 
-    txs_by_component(txs, org, "RELACION",  changes.get_relaciones())
-    txs_by_component(txs, org, "EMAIL",     changes.get_emails())
-    txs_by_component(txs, org, "TELEFONO",  changes.get_relaciones()) 
-    txs_by_component(txs, org, "DOMIROL",   changes.get_domisroles()) 
-    txs_by_component(txs, org, "ETIQUETA",  changes.get_etiquetas()) 
+    for c in changes_components:
+        by_org = org if c in ("imp", "con") else None
+        txs_by_component(txs, changes, c, by_org)
 
     # TODO: Detectar cambio de socio !!!!!!!!
     return txs
@@ -194,7 +200,7 @@ def process_txpersona(block: int, target_orgs: set, txseq: int, personaid: int, 
 
     for org in orgs: 
         orgs_txs = txs_by_org(state, changes, org, target_orgs)
-        if len(orgs_txs) > 0: txs += orgs_txs
+        if orgs_txs: txs.extend(orgs_txs)
 
     return txs
 

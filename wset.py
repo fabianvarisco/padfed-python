@@ -3,7 +3,25 @@
 import json
 import pandas as pd
 from organizaciones import *
+  
+COMPONENT_NAME_BY_TYPE = {
+    "per": "PERSONA",
+    "jur": "JURISDICCION",
+    "act": "ACTIVIDAD",
+    "cms": "CMSEDES",
+    "ema": "EMAILS",
+    "tel": "TELEFONO",
+    "con": "CONTRIBMUNI",
+    "dom": "DOMICILIO",
+    "imp": "IMPUESTO",
+    "dor": "DOMIROL",
+    "eti": "ETIQUETA",
+    "rel": "RELACION",
+    "wit": "TESTIGO",
+}
 
+EMPTY_LIST = list()
+EMPTY_DICT = dict()
 class Wset():
 
   BASE_COLUMNS = ['block', 'txseq', 'item', 'key', 'value', 'isdelete']
@@ -55,19 +73,19 @@ class Wset():
              # en estos objetos siempre viene el org real
              # que fue seteado en resolver_obj 
              org = obj.get("org", -1)
-             if org > 1: self.add_target_org(org)
+             if org > 1: self.target_orgs.add(org)
     
           elif component_type in ['jur', 'act', 'dom', 'dor', 'cms']: 
                org = obj.get("org", -1)
                if org > 1: 
                   # si tienen org > 1, entonces fueron migrados 
-                  self.add_migration_org(org) 
-                  self.add_target_org(org)
+                  self.migration_orgs.add(org) 
+                  self.target_orgs.add(org)
       
                if component_type in ['jur', 'cms']:
                   # recupera el org desde la provincia
                   org = get_org_by_provincia(obj.get("provincia", -1))
-                  if org > 1: self.add_target_org(org)       
+                  if org > 1: self.target_orgs.add(org)       
  
       def resolve_obj(row):
           obj = {}
@@ -116,41 +134,26 @@ class Wset():
   def get_impuesto_by_org(self, org: int) -> dict:
       # obj puede estar vacio si fue un delete 
       # y el obj no se pudo recuperar desde el state
-      for o in self.get_impuestos(): 
-          if not o is None and o.get("org", -1) == org: return o
-      return dict()
+      for o in self.get_objs("imp"): 
+          if o is not None and o.get("org", -1) == org: return o
+      return EMPTY_DICT
   
   # TODO: funcion para obtener una lista con los disintos type del wset
-  #     
-  def get_persona(self) -> list:        return self.get_objs("per")
-  def get_jurisdicciones(self) -> list: return self.get_objs("jur")
-  def get_actividades(self) -> list:    return self.get_objs("act")
-  def get_cmsedes(self) -> list:        return self.get_objs("cms")
-  def get_emails(self) -> list:         return self.get_objs("ema")
-  def get_telefonos(self) -> list:      return self.get_objs("tel")
-  def get_relaciones(self) -> list:     return self.get_objs("rel")
-  def get_contribmunis(self) -> list:   return self.get_objs("con")
-  def get_domicilios(self) -> list:     return self.get_objs("dom")
-  def get_impuestos(self) -> list:      return self.get_objs("imp")
-  def get_persona(self) -> list:        return self.get_objs("per")
-  def get_domisroles(self) -> list:     return self.get_objs("dor")
-  def get_etiquetas(self) -> list:      return self.get_objs("eti")
+  #  
+  def get_components_unique(self) -> list:
+      if self.is_empty():
+         return EMPTY_LIST   
+      return list(self.df.component_type.unique()) 
 
   def get_objs(self, component_type: str) -> list:
-      if self.is_empty(): return list()
-      return self.df.loc[getattr(self.df, "component_type") == component_type, "obj"] 
-
-  def add_target_org(self, org: int): 
-      if not org in self.target_orgs: self.target_orgs.add(org)         
+      if self.is_empty(): return EMPTY_LIST
+      return self.df.loc[getattr(self.df, "component_type") == component_type, "obj"]         
 
   def get_orgs(self) -> set: 
       return self.target_orgs
 
   def has_orgs(self) -> bool: 
       return len(self.target_orgs) > 0
-
-  def add_migration_org(self, org: int):
-      if not org in self.migration_orgs: self.migration_orgs.add(org) 
 
   def from_migration(self, org: int) -> bool:
       return org in self.migration_orgs
