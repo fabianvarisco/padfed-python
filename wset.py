@@ -20,6 +20,8 @@ COMPONENT_NAME_BY_TYPE = {
     "wit": "TESTIGO",
 }
 
+JSONABLE_COMPONENT_TYPE=("imp", "con", 'jur', 'act', 'dom', 'dor', 'cms')
+
 EMPTY_LIST = list()
 EMPTY_DICT = dict()
 class Wset():
@@ -88,22 +90,24 @@ class Wset():
                   if org > 1: self.target_orgs.add(org)       
  
       def resolve_obj(row):
-          obj = {}
+          obj = EMPTY_DICT
           if row.isdelete == "T":
-             # Getting obj from state by key
+             # When deleted getting obj from state by key
              if  not self.state is None \
              and not self.state.is_empty():
-                 state_obj = self.state.get_df().loc[row.key, "obj"]
-                 if len(state_obj) > 0: 
-                    obj = state_obj.get("obj", {})
+                 try:
+                    obj = self.state.get_df().at[row.key, "obj"]
+                 except KeyError:
+                    pass
           
-          elif isinstance(row.value, str) and len(row.value) > 0: 
+          elif isinstance(row.value, str) and len(row.value) > 0 \
+          and  row.component_type in JSONABLE_COMPONENT_TYPE:
                obj = json.loads(row.value)
                if row.component_type in ['imp', 'con']: 
                   org = DEF_IMPUESTOS.get(obj.get("impuesto", -1), 1)
                   obj["org"] = org # Add org into impuesto and contribmuni
           
-          gather_orgs(row.component_type, obj)
+          if obj: gather_orgs(row.component_type, obj)
 
           return obj
 
@@ -141,9 +145,7 @@ class Wset():
   # TODO: funcion para obtener una lista con los disintos type del wset
   #  
   def get_components_unique(self) -> list:
-      if self.is_empty():
-         return EMPTY_LIST   
-      return list(self.df.component_type.unique()) 
+      return EMPTY_LIST if self.is_empty() else list(self.df.component_type.unique()) 
 
   def get_objs(self, component_type: str) -> list:
       if self.is_empty(): return EMPTY_LIST
