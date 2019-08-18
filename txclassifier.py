@@ -76,7 +76,7 @@ def mk_persona_state( block: int, personaid: int ):
     res = db.queryall(QUERY_WSET_BY_KEYPATTERN, {"block" : block, "keypattern" : keypattern})
     return Wset(res).resolve_state().extend()  
 
-def inscripcion_alta(state_impuesto: dict, changes_impuesto: dict) -> bool:
+def impuesto_estado_ac(state_impuesto: dict, changes_impuesto: dict) -> bool:
 
     if  state_impuesto is not None \
     and state_impuesto.get("estado", "") == "AC" \
@@ -122,7 +122,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
     changes_impuesto = None if not "imp" in changes_components else changes.get_impuesto_by_org(org)
 
     if (state_impuesto is not None or changes_impuesto is not None) \
-    and inscripcion_alta(state_impuesto, changes_impuesto):
+    and impuesto_estado_ac(state_impuesto, changes_impuesto):
 
        # MIGRACION o INSCRIPCION
        if state_impuesto is None or len(state_impuesto) == 0: # No estaba inscripto
@@ -148,7 +148,8 @@ def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
                     o = get_org_by_provincia(j.get("provincia", -1))
                     if o in target_orgs: txs_append(txs, o, txt)
           return txs
-    
+
+       # TODO: Puede ser una consolidacon   
        if org == COMARB and "jur" in changes_components:
           # CAMBIO DE JURISDICCION CM
           rows = changes.get_jurisdicciones()
