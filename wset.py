@@ -24,6 +24,8 @@ JSONABLE_COMPONENT_TYPE=("imp", "con", 'jur', 'act', 'dom', 'dor', 'cms')
 
 EMPTY_LIST = list()
 EMPTY_DICT = dict()
+EMPTY_SET = set()
+EMPTY_DF = pd.DataFrame()
 class Wset():
 
   BASE_COLUMNS = ['block', 'txseq', 'item', 'key', 'value', 'isdelete']
@@ -31,13 +33,16 @@ class Wset():
   def __init__(self, src=None): 
     
       # Instance variables
-      self.target_orgs = set()
-      self.migration_orgs = set()
 
       if src is None or len(src) == 0:
-         self.df = pd.DataFrame()  
+         self.df = None  
          return
-      
+
+      self.target_orgs = set()
+      self.migration_orgs = set()
+      self.components_unique = None
+      self.state = None
+
       if isinstance(src, list):
          self.df = pd.DataFrame(src, columns=self.BASE_COLUMNS) 
          new = self.df["key"].str.split("#", n=1, expand=True)
@@ -62,7 +67,7 @@ class Wset():
       return self.df.groupby(['txseq', 'personaid'])
 
   def resolve_state(self):
-      if not self.df.empty:
+      if self.df is not None:
          self.df = self.df.groupby(['key']).first()
          self.df = self.df[self.df["isdelete"] != "T"]
       return self
@@ -86,7 +91,7 @@ class Wset():
       
                if component_type in ['jur', 'cms']:
                   # recupera el org desde la provincia
-                  org = get_org_by_provincia(obj.get("provincia", -1))
+                  org = get_org_by_provincia(obj.get("provincia"))
                   if org > 1: self.target_orgs.add(org)       
  
       def resolve_obj(row):
@@ -94,7 +99,7 @@ class Wset():
           if row.isdelete == "T":
              # When deleted getting obj from state by key
              if  not self.state is None \
-             and not self.state.is_empty():
+             and not self.state.df.empty:
                  try:
                     obj = self.state.get_df().at[row.key, "obj"]
                  except KeyError:
@@ -104,20 +109,20 @@ class Wset():
           and  row.component_type in JSONABLE_COMPONENT_TYPE:
                obj = json.loads(row.value)
                if row.component_type in ['imp', 'con']: 
-                  org = DEF_IMPUESTOS.get(obj.get("impuesto", -1), 1)
+                  org = DEF_IMPUESTOS.get(obj.get("impuesto"), 1)
                   obj["org"] = org # Add org into impuesto and contribmuni
           
           if obj: gather_orgs(row.component_type, obj)
 
           return obj
 
-      if not self.df.empty:
+      if self.df is not None:
          self.df["obj"] = self.df.apply(lambda row: resolve_obj(row), axis=1)
       return self
 
   # Delete dummies changes(state == change)
   def reduce(self):
-      if self.df.empty or self.state is None or self.state.is_empty(): return self
+      if self.df is None or self.df.empty or self.state is None or self.state.df.empty: return self
       
       idx=self.df.fillna("x").merge(self.state.get_df().fillna("x"), how='inner', on=['key', 'value', 'isdelete']).index
       if len(idx) == 0: return self
@@ -127,7 +132,7 @@ class Wset():
 
   def get_df(self) -> pd.DataFrame: return self.df
 
-  def is_empty(self) -> bool: return self.df.empty  
+  def is_empty(self) -> bool: return self.df is None or self.df.empty  
 
   def has_deletes(self) -> bool: 
       try:
@@ -139,23 +144,25 @@ class Wset():
       # obj puede estar vacio si fue un delete 
       # y el obj no se pudo recuperar desde el state
       for o in self.get_objs("imp"): 
-          if o is not None and o.get("org", -1) == org: return o
+          if o.get("org") == org: return o
       return EMPTY_DICT
-  
-  # TODO: funcion para obtener una lista con los disintos type del wset
-  #  
-  def get_components_unique(self) -> list:
-      return EMPTY_LIST if self.is_empty() else list(self.df.component_type.unique()) 
+   
+  def get_components_unique(self) -> set:
+      if self.is_empty(): 
+         return EMPTY_SET
+      if self.components_unique is None:
+         self.components_unique = set(self.df.component_type.unique())
+      return self.components_unique 
 
   def get_objs(self, component_type: str) -> list:
-      if self.is_empty(): return EMPTY_LIST
+      if component_type not in self.get_components_unique(): return EMPTY_LIST
       return self.df.loc[getattr(self.df, "component_type") == component_type, "obj"]         
 
   def get_orgs(self) -> set: 
-      return self.target_orgs
+      return self.target_orgs if self.state is None else self.target_orgs.union(self.state.get_orgs())
 
   def has_orgs(self) -> bool: 
-      return len(self.target_orgs) > 0
+      return bool(self.target_orgs)
 
   def from_migration(self, org: int) -> bool:
       return org in self.migration_orgs

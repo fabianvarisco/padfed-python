@@ -14,6 +14,8 @@ from organizaciones import *
 
 logger = logging.getLogger()
 
+EMPTY_LIST = list()
+
 # Oracle Data access
 class db_access:
 
@@ -74,78 +76,71 @@ def txs_append(txs: list, org: int, txt: str):
 def mk_persona_state( block: int, personaid: int ):
     keypattern = "per:" + str(personaid) + "#%"
     res = db.queryall(QUERY_WSET_BY_KEYPATTERN, {"block" : block, "keypattern" : keypattern})
-    return Wset(res).resolve_state().extend()  
+    if not res: return None
+    state = Wset(res).resolve_state().extend()    
+    # Si el state no tiene datos jurisdiccionales lo elimina 
+    return state if state.has_orgs() else None
 
-def impuesto_estado_ac(state_impuesto: dict, changes_impuesto: dict) -> bool:
+def impuesto_estado_AC(state_impuesto: dict, changes_impuesto: dict) -> bool:
 
-    if  state_impuesto is not None \
-    and state_impuesto.get("estado", "") == "AC" \
-    and len(changes_impuesto) == 0: 
+    if  state_impuesto.get("estado") == "AC" \
+    and not changes_impuesto: 
         return True
 
-    if  changes_impuesto is not None \
-    and changes_impuesto.get("estado", "") == "AC" \
-    and changes_impuesto.get("isdelete", "") != "T":
+    if  changes_impuesto.get("estado") == "AC" \
+    and changes_impuesto.get("isdelete", "x") != "T":
         return True
     
     return False   
 
 def txs_by_component(txs: list, changes: Wset, component_type: str, org: int):
-    components = changes.get_objs(component_type)
-    if len(components) > 0:
-
-       if component_type == "wit":
-          txs_append(txs, org, "NUEVA PERSONA")
-          return
-
-       name = COMPONENT_NAME_BY_TYPE.get(component_type, None)
-
-       if name is None:
-          raise ValueError("component_type {} unknow".format(component_type))
+    if component_type == "wit":
+       txs_append(txs, org, "NUEVA PERSONA")
+       return
     
-       if org is None:
-          txs_append(txs, org, "CAMBIO EN {}".format(name))
-          return
-      
-       # Extrict Mode
-       for c in components:
-           if c.get("org", -1) == org: 
-              txs_append(txs, org, "CAMBIO EN {}".format(name)) 
+    name = COMPONENT_NAME_BY_TYPE.get(component_type)
+    if name is None:
+       raise ValueError("component_type {} unknow".format(component_type))
+
+    if org is None:
+       txs_append(txs, org, "CAMBIO EN {}".format(name))
+       return
+
+    for c in changes.get_objs(component_type):
+        if c.get("org") == org: 
+           txs_append(txs, org, "CAMBIO EN {}".format(name)) 
 
 def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
     txs = list()
 
-    state_components = state.get_components_unique()
     changes_components = changes.get_components_unique()
 
-    state_impuesto   = None if not "imp" in state_components   else state.get_impuesto_by_org(org)
-    changes_impuesto = None if not "imp" in changes_components else changes.get_impuesto_by_org(org)
+    state_impuesto   = EMPTY_DICT if state is None else state.get_impuesto_by_org(org)
+    changes_impuesto = changes.get_impuesto_by_org(org)
 
-    if (state_impuesto is not None or changes_impuesto is not None) \
-    and impuesto_estado_ac(state_impuesto, changes_impuesto):
+    if  (state_impuesto or changes_impuesto) \
+    and impuesto_estado_AC(state_impuesto, changes_impuesto):
 
        # MIGRACION o INSCRIPCION
-       if state_impuesto is None or len(state_impuesto) == 0: # No estaba inscripto
-          txt = "MIGRACON" if changes.from_migration(org) else "INSCRIPCION"
+       if not state_impuesto: # No estaba inscripto
+          txt = "MIGRACION" if changes.from_migration(org) else "INSCRIPCION"
           if org in target_orgs: txs_append(txs, org, txt)
           if org == COMARB and "jur" in changes_components:
              txt += " DESDE CM"
              for j in changes.get_jurisdicciones():
-                 o = get_org_by_provincia(j.get("provincia", -1))
+                 o = get_org_by_provincia(j.get("provincia"))
                  if o in target_orgs: txs_append(txs, o, txt)
           return txs
 
        # REINSCRIPCION
-       if state_impuesto is not None \
-       and len(state_impuesto) > 0 \
-       and state_impuesto.get("estado", "") != "AC":
+       if state_impuesto.get("estado", "x") != "AC":
           txt = "REINSCRIPCION"
           if org in target_orgs: txs_append(txs, org, txt)
           if org == COMARB and "jur" in changes_components:
              txt += " DESDE CM"
              for j in changes.get_jurisdicciones(): 
-                 if j.get("estado", "") == "AC":
-                    o = get_org_by_provincia(j.get("provincia", -1))
+                 if j.get("estado", "x") == "AC":
+                    o = get_org_by_provincia(j.get("provincia"))
                     if o in target_orgs: txs_append(txs, o, txt)
           return txs
 
@@ -156,7 +151,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
           if len(rows) > 0:
              if org in target_orgs: txs_append(txs, org, "CAMBIO JURISDICCION CM")
              for j in rows:
-                 o = get_org_by_provincia(j.get("provincia", -1))
+                 o = get_org_by_provincia(j.get("provincia"))
                  if o in target_orgs: txs_append(txs, o, "CAMBIO JURISDICCION CM")
  
           # CAMBIO DE SEDE CM
@@ -165,7 +160,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> list:
              if len(rows) > 0:
                 if org in target_orgs: txs_append(txs, org, "CAMBIO DE SEDE CM")
                 for s in rows:
-                    o = get_org_by_provincia(s.get("provincia", -1))
+                    o = get_org_by_provincia(s.get("provincia"))
                     if o in target_orgs: txs_append(txs, o, "CAMBIO DE SEDE CM")
 
     if not org in target_orgs: return txs
@@ -182,21 +177,16 @@ def process_txpersona(block: int, target_orgs: set, txseq: int, personaid: int, 
 
     state = mk_persona_state(block, personaid)
 
-    # Si el state no tiene datos jurisdiccionales lo vacia
-    if not state.has_orgs(): state = Wset() 
-
     changes = Wset(changes).set_state(state).extend().reduce()
+
+    orgs = changes.get_orgs().intersection(target_orgs)
+
+    if not orgs: return EMPTY_LIST
 
     txs = list()
 
-    union_orgs = state.get_orgs().union(changes.get_orgs())
-
-    orgs = union_orgs.intersection(target_orgs)
-
-    if len(orgs) == 0: return txs
-
     if  COMARB not in target_orgs \
-    and COMARB in union_orgs:
+    and COMARB in changes.get_orgs():
         orgs.add(COMARB) 
 
     for org in orgs: 
@@ -332,12 +322,10 @@ if __name__ == '__main__':
    
      if block_processed > -1: block_start = block_processed
       
-     i = 0
      logger.info("processing from block {} to {} ...".format(block_start, block_stop))
-     for block in range(block_start, block_stop+1):
+     for i, block in enumerate(range(block_start, block_stop+1)):
          for tx in process_block(block, target_orgs): print_output(tx, f)
          block_processed = block
-         i += 1
          if i % 100 == 0: save_config(config_file_name, config, block_processed)
    
      save_config(config_file_name, config, block_processed)
