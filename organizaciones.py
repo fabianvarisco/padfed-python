@@ -2,10 +2,10 @@ COMARB = 900
 
 DEF_ORGANIZACIONES = {
   900: { "org":900, "name":"COMISION ARBITRAL",         "cuit":30658892718, "provincia": -1 },  
-  901: { "org":901, "name":"IP - CABA",                 "cuit":34999032089, "provincia":  0 },
+  901: { "org":901, "name":"AGIP - CABA",               "cuit":34999032089, "provincia":  0 },
   902: { "org":902, "name":"BA - BUENOS AIRES",         "cuit":30710404611, "provincia":  1 },
   903: { "org":903, "name":"AGR - CATAMARCA",           "cuit":30668085837, "provincia":  2 },
-  904: { "org":904, "name":"TAS CORDOBA",               "cuit":30999256712, "provincia":  3 },
+  904: { "org":904, "name":"RENTAS CORDOBA",            "cuit":30999256712, "provincia":  3 },
   905: { "org":905, "name":"DGR - CORRIENTES",          "cuit":30709110078, "provincia":  4 },
   906: { "org":906, "name":"DGR - CHACO",               "cuit":33999176769, "provincia": 16 },
   907: { "org":907, "name":"DGR - CHUBUT",              "cuit":30670499584, "provincia": 17 },
