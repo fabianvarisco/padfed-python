@@ -106,6 +106,7 @@ def txs_by_component(txs: list, changes: Wset, component_type: str, org: int):
         if (component_type in ("imp", "con") and org == c.get("org")) \
         or (component_type == "jur" and org == get_org_by_provincia(c.get("provincia"))):
            txs_append(txs, org, "CAMBIO EN {}".format(name))
+           return
 
 def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> (bool, list):
     txs = list()
