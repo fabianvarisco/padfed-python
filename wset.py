@@ -17,6 +17,7 @@ COMPONENT_NAME_BY_TYPE = {
     "dor": "DOMIROL",
     "eti": "ETIQUETA",
     "rel": "RELACION",
+    "cat": "CATEGORIA",
     "wit": "TESTIGO",
 }
 
@@ -81,18 +82,20 @@ class Wset():
              # que fue seteado en resolver_obj 
              org = obj.get("org", -1)
              if org > 1: self.target_orgs.add(org)
+             return
     
-          elif component_type in ['jur', 'act', 'dom', 'dor', 'cms']: 
-               org = obj.get("org", -1)
-               if org > 1: 
-                  # si tienen org > 1, entonces fueron migrados 
-                  self.migration_orgs.add(org) 
-                  self.target_orgs.add(org)
+          if component_type in ('jur', 'act', 'dom', 'dor'): 
+             org = obj.get("org", -1)
+             if org > 1: 
+                # si tienen org > 1, entonces fueron migrados 
+                self.migration_orgs.add(org) 
+                self.target_orgs.add(org)
       
-               if component_type in ['jur', 'cms']:
-                  # recupera el org desde la provincia
-                  org = get_org_by_provincia(obj.get("provincia"))
-                  if org > 1: self.target_orgs.add(org)       
+          if component_type in ('jur', 'cms'):
+             # recupera el org desde la provincia
+             org = get_org_by_provincia(obj.get("provincia"))
+             if org > 1: self.target_orgs.add(org) 
+             if component_type == 'cms': self.target_orgs.add(COMARB)   
  
       def resolve_obj(row):
           obj = EMPTY_DICT
