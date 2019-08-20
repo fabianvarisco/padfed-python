@@ -113,7 +113,7 @@ class Wset():
                obj = json.loads(row.value)
                if row.component_type in ['imp', 'con']: 
                   org = DEF_IMPUESTOS.get(obj.get("impuesto"), 1)
-                  obj["org"] = org # Add org into impuesto and contribmuni
+                  if org > 1: obj["org"] = org # Add org into impuesto and contribmuni
           
           if obj: gather_orgs(row.component_type, obj)
 
