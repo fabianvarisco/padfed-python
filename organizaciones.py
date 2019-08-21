@@ -3,7 +3,7 @@ COMARB = 900
 DEF_ORGANIZACIONES = {
   900: { "org":900, "name":"COMISION ARBITRAL",         "cuit":30658892718, "provincia": -1 },  
   901: { "org":901, "name":"IP - CABA",                 "cuit":34999032089, "provincia":  0 },
-  902: { "org":902, "name":"BA - BUENOS AIRES",         "cuit":30710404611, "provincia":  1 },
+  902: { "org":902, "name":"ARBA - BUENOS AIRES",       "cuit":30710404611, "provincia":  1 },
   903: { "org":903, "name":"AGR - CATAMARCA",           "cuit":30668085837, "provincia":  2 },
   904: { "org":904, "name":"TAS CORDOBA",               "cuit":30999256712, "provincia":  3 },
   905: { "org":905, "name":"DGR - CORRIENTES",          "cuit":30709110078, "provincia":  4 },
@@ -30,11 +30,10 @@ DEF_ORGANIZACIONES = {
 
 dict_provincia_org = dict()
 
-def get_org_by_provincia(provincia: int) -> dict:
-    if len(dict_provincia_org) == 0:
-       for key in DEF_ORGANIZACIONES:
-           p = DEF_ORGANIZACIONES[key].get("provincia") 
-           if p > -1: dict_provincia_org[p] = key    
+def get_org_by_provincia(provincia: int) -> int:
+    global dict_provincia_org
+    if not dict_provincia_org:
+       dict_provincia_org = { v.get("provincia") : k for k, v in DEF_ORGANIZACIONES if v.get("provincia") > -1 } 
     return dict_provincia_org.get(provincia, -1)
 
 DEF_IMPUESTOS = {        
