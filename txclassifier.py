@@ -45,14 +45,16 @@ select *
 from hlf.bc_valid_tx_write_set 
 where block = :block
 and key||'' /* avoid index by key */ like 'per:%'
-order by txseq, item"""
+order by txseq, item
+"""
 
 QUERY_WSET_BY_KEYPATTERN = """
 select *
 from hlf.bc_valid_tx_write_set
 where block+0 < :block
 and key like :keypattern
-order by key, block desc"""
+order by key, block desc
+"""
 
 QUERY_MAX_BLOCK = """
 select max(block) as max_block
@@ -192,7 +194,7 @@ def process_block(block: int, target_orgs: set) -> list:
 
     txs = list()
 
-    if len(res) == 0: 
+    if not res: 
        logger.debug("block {} non-existing or empty".format(block))
        return txs
 

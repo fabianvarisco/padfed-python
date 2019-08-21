@@ -74,10 +74,6 @@ filters.target_orgs: dict_keys([900, 901, 902, 903, 904, 905, 906, 907, 908, 909
 {'block': 228566, 'txseq': 0, 'personaid': 27269391702, 'org': 900, 'kind': 'MIGRACON'}
 {'block': 228566, 'txseq': 0, 'personaid': 27269391702, 'org': 901, 'kind': 'MIGRACON DESDE CM'}
 {'block': 228566, 'txseq': 0, 'personaid': 27269391702, 'org': 903, 'kind': 'MIGRACON DESDE CM'}
-{'block': 228566, 'txseq': 0, 'personaid': 27269391702, 'org': 901, 'kind': 'CAMBIO EN ACTIVIDAD'}
-{'block': 228566, 'txseq': 0, 'personaid': 27269391702, 'org': 901, 'kind': 'CAMBIO EN DOMIROL'}
-{'block': 228566, 'txseq': 0, 'personaid': 27269391702, 'org': 903, 'kind': 'CAMBIO EN ACTIVIDAD'}
-{'block': 228566, 'txseq': 0, 'personaid': 27269391702, 'org': 903, 'kind': 'CAMBIO EN DOMIROL'}
 20190814-175723 - txclassifier.py success end
 20190814-175723 - txclassifier.py stop
 ``` 
