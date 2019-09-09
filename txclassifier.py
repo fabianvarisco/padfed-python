@@ -17,6 +17,8 @@ logger = logging.getLogger()
 EMPTY_LIST = list()
 
 # Oracle Data access
+# requiere: 
+# export LD_LIBRARY_PATH=/xx/xx/instantclient_19_3
 class db_access:
 
   def __init__(self, user = 'HLF', passwd = 'HLF', url = 'localhost/xe'):
@@ -76,20 +78,22 @@ def txs_append(txs: list, org: int, txt: str):
     txs.append({"block": None, "txseq": None, "personaid": None, "org": org, "kind": txt})
 
 def mk_persona_state( block: int, personaid: int ):
-    keypattern = "per:" + str(personaid) + "#%"
+    keypattern = "per:{}#%".format(personaid)
     res = db.queryall(QUERY_WSET_BY_KEYPATTERN, {"block" : block, "keypattern" : keypattern})
     if not res: return None
     state = Wset(res).resolve_state().extend()    
     # Si el state no tiene datos jurisdiccionales lo elimina 
     return state if state.has_orgs() else None
 
-def impuesto_estado_AC(state_impuesto: dict, changes_impuesto: dict) -> bool:
+SET_IMPUESTO_ESTADOS_ALTA = ("AC", "EX", "NA")
 
-    if  state_impuesto.get("estado") == "AC" \
+def impuesto_estado_ALTA(state_impuesto: dict, changes_impuesto: dict) -> bool:
+
+    if  state_impuesto.get("estado") in SET_IMPUESTO_ESTADOS_ALTA \
     and not changes_impuesto: 
         return True
 
-    if  changes_impuesto.get("estado") == "AC" \
+    if  changes_impuesto.get("estado") in SET_IMPUESTO_ESTADOS_ALTA \
     and changes_impuesto.get("isdelete", "x") != "T":
         return True
     
@@ -108,6 +112,7 @@ def txs_by_component(txs: list, changes: Wset, component_type: str, org: int):
         if (component_type in ("imp", "con") and org == c.get("org")) \
         or (component_type == "jur" and org == get_org_by_provincia(c.get("provincia"))):
            txs_append(txs, org, "CAMBIO EN {}".format(name))
+           return
 
 def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> (bool, list):
     txs = list()
@@ -118,13 +123,13 @@ def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> (bool,
     changes_impuesto = changes.get_impuesto_by_org(org)
 
     if  (state_impuesto or changes_impuesto) \
-    and impuesto_estado_AC(state_impuesto, changes_impuesto):
+    and impuesto_estado_ALTA(state_impuesto, changes_impuesto):
 
        txt = None
 
        if   not state_impuesto: # No estaba inscripto
             txt = "MIGRACION" if changes.from_migration(org) else "INSCRIPCION"
-       elif state_impuesto.get("estado", "x") != "AC":
+       elif state_impuesto.get("estado", "x") not in SET_IMPUESTO_ESTADOS_ALTA:
             txt = "REINSCRIPCION"
        
        if txt:
@@ -132,7 +137,7 @@ def txs_by_org(state: Wset, changes: Wset, org: int, target_orgs: set) -> (bool,
           if org == COMARB and "jur" in changes_components:
              txt += " DESDE CM"
              for j in changes.get_objs("jur"):
-                 if txt[0] in ("M", "I") or j.get("estado", "x") == "AC":
+                 if txt[0] in ("M", "I") or j.get("estado", "x") in SET_IMPUESTO_ESTADOS_ALTA:
                     o = get_org_by_provincia(j.get("provincia"))
                     if o in target_orgs: txs_append(txs, o, txt)
           return True, txs # break
@@ -283,8 +288,8 @@ if __name__ == '__main__':
      block_processed = config_getint(config, "filters", "block_processed")
      target_orgs     = config_target_orgs(config, "behaviour", "target_orgs")
 
-     print_output("db.url: {}".format(user), f)
-     print_output("db.user: {}".format(url), f)
+     print_output("db.user: {}".format(user), f)
+     print_output("db.url: {}".format(url), f)
      print_output("filters.block_start: {}".format(block_start), f)
      print_output("filters.block_stop: {}".format(block_stop), f)
      print_output("filters.block_processed: {}".format(block_processed), f)
